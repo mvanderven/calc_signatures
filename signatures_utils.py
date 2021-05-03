@@ -894,7 +894,7 @@ def calc_signatures(df_observations, df_simulations, id_col = 'loc_id',
                 for feature in features:
                     
                     if feature in stat_features:
-                        print('[CALC] ', feature) 
+                        # print('[CALC] ', feature) 
                                                 
                         ## get expected column names 
                         return_cols = func_dict[feature]['cols'] 
@@ -909,7 +909,7 @@ def calc_signatures(df_observations, df_simulations, id_col = 'loc_id',
                             
                             
                     if feature in corr_features: 
-                        print('[CALC] ', feature) 
+                        # print('[CALC] ', feature) 
                         
                         if 'n-acorr' in feature:
                             
@@ -941,7 +941,7 @@ def calc_signatures(df_observations, df_simulations, id_col = 'loc_id',
                                         tmp_df.loc[ tmp_df['ID'] == gauge_id, col_name ] = cross_corr 
 
                     if feature in fdc_features:
-                        print('[CALC] ', feature) 
+                        # print('[CALC] ', feature) 
                         
                         if 'fdc-q' in feature: 
                             
@@ -974,7 +974,7 @@ def calc_signatures(df_observations, df_simulations, id_col = 'loc_id',
                                              
                         
                     if feature in hydro_features:
-                        print('[CALC] ', feature)  
+                        # print('[CALC] ', feature)  
                         
                         return_cols = func_dict[feature]['cols'] 
                         cdf = tw_buffer.apply(func_dict[feature]['func'])
@@ -1044,7 +1044,7 @@ def pa_calc_signatures_1(gauge_id, df_model, gauge_dir, out_dir):
     ## MODEL DATA 
     df_model = df_model[ df_model['gauge'] == gauge_id].compute()
     df_model = df_model.set_index('ID')
-    print(df_model.info())
+
     ## reshape
     df_sim = rows_to_cols(df_model, 'gauge', 'time', 'dis24')
     
@@ -1053,7 +1053,7 @@ def pa_calc_signatures_1(gauge_id, df_model, gauge_dir, out_dir):
     
     if gauge_fn.exists():
         df_gauge, meta = read_gauge_data([gauge_fn]) 
-        df_gauge = df_gauge[ (df_gauge['date'] >= '1991') &  (df_gauge['date'] < '1994')] 
+        df_gauge = df_gauge[ (df_gauge['date'] >= '1991') &  (df_gauge['date'] < '2021')] 
 
         ## calc signatures 
         out_df = calc_signatures(df_gauge, df_sim, time_window=['all']) 
@@ -1065,7 +1065,7 @@ def pa_calc_signatures_1(gauge_id, df_model, gauge_dir, out_dir):
         except:
             fn_tmp = None 
     
-    return out_df 
+        return out_df 
 
 
 
