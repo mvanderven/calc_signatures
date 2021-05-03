@@ -1020,7 +1020,6 @@ def pa_calc_signatures_0(gauge_id, fn_simulations, gauge_dir, out_dir):
     
     if gauge_fn.exists():
         df_gauge, meta = read_gauge_data([gauge_fn]) 
-        
         #df_gauge = df_gauge[ (df_gauge['date'] >= '1991') &  (df_gauge['date'] < '2021')].copy()
         ## TEST 
         df_gauge = df_gauge[ (df_gauge['date'] >= '1991') &  (df_gauge['date'] < '1994')].copy()
@@ -1029,8 +1028,11 @@ def pa_calc_signatures_0(gauge_id, fn_simulations, gauge_dir, out_dir):
 
         out_df = calc_signatures(df_gauge, df_simulations, time_window=['all']) 
         
-        fn_tmp = out_dir / 'signatures_{}.csv'.format(gauge_id) 
-        out_df.to_csv(fn_tmp)
+        try:
+            fn_tmp = out_dir / 'signatures_{}.csv'.format(gauge_id) 
+            out_df.to_csv(fn_tmp)
+        except:
+            fn_tmp = None 
         
         return out_df
     
@@ -1040,20 +1042,19 @@ def pa_calc_signatures_0(gauge_id, fn_simulations, gauge_dir, out_dir):
 def pa_calc_signatures_1(gauge_id, df_model, gauge_dir, out_dir):
     
     ## MODEL DATA 
-    df_sim_ = df_model[ df_model['gauge'] == gauge_id].compute()
-    print(df_sim_.info())
+    df_model = df_model[ df_model['gauge'] == gauge_id].compute()
+    df_model = df_model.set_index('ID')
+    print(df_model.info())
     ## reshape
-    df_sim = rows_to_cols(df_sim_, 'gauge', 'time', 'dis24')
+    df_sim = rows_to_cols(df_model, 'gauge', 'time', 'dis24')
     
     ## GAUGE DATA 
-    # df_obs = df_gauge[ df_gauge['loc_id'] == gauge_id].copy() 
     gauge_fn = gauge_dir / '{}_Q_Day.Cmd.txt'.format(gauge_id) 
     
     if gauge_fn.exists():
         df_gauge, meta = read_gauge_data([gauge_fn]) 
         df_gauge = df_gauge[ (df_gauge['date'] >= '1991') &  (df_gauge['date'] < '1994')] 
-        print(df_gauge.info())
-        
+
         ## calc signatures 
         out_df = calc_signatures(df_gauge, df_sim, time_window=['all']) 
         

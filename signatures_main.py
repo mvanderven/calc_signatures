@@ -28,22 +28,14 @@ def run_parallel(input_dir):
     print('\n [INFO] load model data')
     time_load_model = time.time() 
     files = [file for file in input_dir.glob('efas_timeseries_*_buffer_4.csv')] 
-    
     ## DASK 
     df_model = dd.read_csv(files) 
-    df_model = df_model.set_index('ID') 
-    # df_model = df_model.compute()
-    
-    ## PANDAS 
-    # df_model = pd.concat(map(pd.read_csv, files))
-    # df_model = df_model.set_index('ID')
-    
     print(' [INFO] model data loaded - finished in {:.2f} minutes'.format( (time.time()-time_load_model)/60 ))
         
     #### 3 - GAUGE METADATA
     df_gauges = pd.read_csv(fn_gauges, index_col=0) 
     # gauge_ids = df_gauges.index.values   
-    gauge_ids = df_gauges.sample(n=2).index.values
+    gauge_ids = df_gauges.sample(n=10).index.values
         
     #### 4 - SETUP PATHOS POOL
     p = pa.pools.ParallelPool(n_nodes=2) 
@@ -51,7 +43,7 @@ def run_parallel(input_dir):
     #### 5 - SET RUN PARAMETERS 
     list_model = [df_model] * len(gauge_ids)        ## 1 
     list_dir = [input_dir] * len(gauge_ids)         ## 0, 1 
-    list_sim_files = [files] * len(gauge_ids)       ## 0 
+    # list_sim_files = [files] * len(gauge_ids)       ## 0 
     list_gauge_dir = [dir_gauges] * len(gauge_ids)  ## 0 1 
         
     #### 6 - RUN POOL
@@ -73,7 +65,7 @@ if __name__ == '__main__':
 
     ## cartesius environment 
     #input_dir = Path("/scratch-shared/mizzivdv/signatures_V1_input/")
-    input_dir = Path(r"C:\Users\mvand\Documents\Master EE\Year 4\Thesis\data\dev_input") 
+    input_dir = Path(r"C:\Users\mvand\Documents\Master EE\Year 4\Thesis\data\dev") 
     
     ## run 
     results = run_parallel(input_dir) 
