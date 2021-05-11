@@ -838,7 +838,7 @@ def calc_signatures(df, gauge_col,
                     fdc_q = [1, 2, 5, 10, 50, 90, 95, 99],
                     n_alag = [1], n_clag = [0,1]):
 
-        
+    print('[START] signature calculation')  
     
     calc_cols = df.columns 
     obs_cols = [col for col in calc_cols if not gauge_col in col] 
@@ -854,12 +854,9 @@ def calc_signatures(df, gauge_col,
     df_out['ID'] = calc_cols 
     df_out = df_out.set_index('ID') 
     
+    ### setup for different time windows 
     for tw in time_window: 
-        
-        # tmp_df = pd.DataFrame() 
-        # tmp_df['ID'] = calc_cols 
-        # tmp_df = tmp_df.set_index('ID')
-        
+                
         time_index = df.index 
         
         if tw == 'all':
@@ -878,14 +875,13 @@ def calc_signatures(df, gauge_col,
         if tw == 'weekly':
             df['slice'] = time_index.isocalendar().week
           
-        
         ## calc feature 
         for feature in features:
             
             ## get output names
             result_cols = func_dict[feature]['cols']
             
-            ## go voer time window 
+            ## go over time window 
             for _slice in df['slice'].unique():
                 
                 ## get data 
@@ -945,7 +941,6 @@ def calc_signatures(df, gauge_col,
                             df_out.loc[results.columns, _col] = results.loc[i,:].values 
                     
                     else:
-                        
                         results = calc_df.apply(func_dict[feature]['func']) 
                         _col = result_cols[0].format(result_name)  
                         df_out.loc[results.index, _col] = results.values
@@ -956,16 +951,15 @@ def calc_signatures(df, gauge_col,
                     results = calc_df.apply(func_dict[feature]['func']) 
                     
                     if len(result_cols) > 1:
-                        print(results)
                         for i, col in enumerate(result_cols):
                             _col = col.format(result_name) 
-                            print(_col) 
                             df_out.loc[results.columns, _col] = results.loc[i,:].values
                             
                     else:
                         _col = result_cols[0].format(result_name) 
                         df_out.loc[results.index, _col] = results.values 
-                        
+     
+    print('\n[FINISH] signature calculation') 
     return df_out 
 
 
@@ -1022,7 +1016,7 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         ## calc signatures 
         df_signatures = calc_signatures( df, gauge_col,
                                         time_window = ['all','seasonal']) 
-
+        
         ## calculate similarity vector?
         
         
