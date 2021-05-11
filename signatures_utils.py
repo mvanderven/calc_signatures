@@ -827,285 +827,153 @@ func_dict = {
 
 
 
-def calc_signatures(df_observations, df_simulations, id_col = 'loc_id',
+# def calc_signatures(df_observations, df_simulations, id_col = 'loc_id',
+#                     features = feature_options, time_window = option_time_window,
+#                     fdc_q = [1, 2, 5, 10, 50, 90, 95, 99],
+#                     n_alag = [1], n_clag = [0,1]):
+
+
+def calc_signatures(df, gauge_col,
                     features = feature_options, time_window = option_time_window,
                     fdc_q = [1, 2, 5, 10, 50, 90, 95, 99],
                     n_alag = [1], n_clag = [0,1]):
+
         
-    df_out = pd.DataFrame()
+    
+    calc_cols = df.columns 
+    obs_cols = [col for col in calc_cols if not gauge_col in col] 
     
     ## organize features 
     stat_features =  [feat for feat in features if feat in stat_options]
     corr_features =  [feat for feat in features if feat in corr_options]
     fdc_features =   [feat for feat in features if feat in fdc_options]
     hydro_features = [feat for feat in features if feat in hydro_options] 
+
+
+    df_out = pd.DataFrame() 
+    df_out['ID'] = calc_cols 
+    df_out = df_out.set_index('ID') 
     
-    for i, gauge_id in enumerate( df_observations[id_col].unique() ):
-    
-        gauge_ts = df_observations[ df_observations[id_col] == gauge_id][['date', 'value']].copy()
-        gauge_ts['time'] = gauge_ts['date'] 
-        gauge_ts = gauge_ts.set_index('time')
+    for tw in time_window: 
         
-        cell_cols = [col for col in df_simulations.columns if gauge_id in col]
-        df_buffer = df_simulations[cell_cols].copy() 
+        # tmp_df = pd.DataFrame() 
+        # tmp_df['ID'] = calc_cols 
+        # tmp_df = tmp_df.set_index('ID')
         
-        gauge_col = 'gauge_{}'.format(gauge_id)
-        df_buffer[gauge_col] = gauge_ts['value'] 
-        
-        ## missing data in observations 
-        ## adapt data availability based on
-        ## observation availability 
-        print(df_buffer.shape)
-        nan_mask = df_buffer[gauge_col].isnull() 
-        print(df_buffer[gauge_col].isnull().sum())
-        
-        df_buffer[nan_mask] = np.nan 
-        
-        print(df_buffer.isnull().sum())
-        # df_buffer = df_buffer.dropna(how='any',
-        #                              subset=[gauge_col])
-        print(df_buffer.shape)        
-        
-        ## get ID values 
-        ts_idx = df_buffer.columns  
-        
-        ## set temporary df to collect gauge output 
-        tmp_df = pd.DataFrame()
-        tmp_df['ID'] = ts_idx  
-        
-        ## create time window columns 
-        for tw in time_window:
-
-            date_ix = df_buffer.index 
-            
-            if tw == 'all':
-                df_buffer['slice'] = 0 
-                                   
-            if tw == 'annual':
-                df_buffer['slice'] = date_ix.year 
-            
-            if tw == 'seasonal':
-                time_windows = dict(zip(range(1,13), time_format[tw])) 
-                df_buffer['slice'] = date_ix.month.map(time_windows)
-                
-            if tw == 'monthly':
-                df_buffer['slice'] = date_ix.month 
-
-            if tw == 'weekly':
-                df_buffer['slice'] = date_ix.isocalendar().week
-                
-            
-            ## go over time windows and calc
-            for time_index in df_buffer['slice'].unique(): 
-                                
-                tw_buffer = df_buffer[ df_buffer['slice'] == time_index][ts_idx] 
-                
-                if tw == 'all':
-                    result_name = 'all' 
-                else:
-                    result_name = '{}_{}'.format(tw, time_index)
-                
-                for feature in features:
-                    
-                    if feature in stat_features:
-                        # print('[CALC] ', feature) 
-                                                
-                        ## get expected column names 
-                        return_cols = func_dict[feature]['cols'] 
-            
-                        ## calculate statistics 
-                        cdf = tw_buffer.apply(func_dict[feature]['func']) 
-                                                
-                        ## add to results 
-                        for i, col in enumerate(return_cols):
-                            col_name = col.format( result_name )
-                            tmp_df[ col_name ] = cdf.loc[i,: ].values 
-                            
-                            
-                    if feature in corr_features: 
-                        # print('[CALC] ', feature) 
-                        
-                        if 'n-acorr' in feature:
-                            
-                            ## get expected column names 
-                            return_cols = func_dict[feature]['cols'] 
-                            
-                            ## loop throug given lag times 
-                            for i, lag in enumerate(n_alag):
-
-                                ## check if lag time smaller than total timeseries time 
-                                if lag < len(tw_buffer):
-                                    cdf = tw_buffer.apply( func_dict[feature]['func'], lag = lag ) 
-                                    
-                                    for j, col in enumerate(return_cols):
-                                        col_name = col.format(lag, result_name) 
-                                        tmp_df[ col_name ] = cdf.values 
-                        
-                        if 'n-ccorr' in feature:
-                            return_cols = func_dict[feature]['cols'][0] 
-                            
-                            for i, lag in enumerate(n_clag):
-                                
-                                col_name = return_cols.format( lag, result_name )
-                                                                
-                                if lag < len(tw_buffer):
-                                    
-                                    for gauge_id in ts_idx:
-                                        cross_corr = func_dict[feature]['func']( tw_buffer[gauge_col], tw_buffer[gauge_id], lag=lag  ) 
-                                        tmp_df.loc[ tmp_df['ID'] == gauge_id, col_name ] = cross_corr 
-
-                    if feature in fdc_features:
-                        # print('[CALC] ', feature) 
-                        
-                        if 'fdc-q' in feature: 
-                            
-                            cdf = tw_buffer.apply(func_dict[feature]['func'], fdc_q = fdc_q) 
-                            
-                            for i, q in enumerate(fdc_q ):
-                                col_name = func_dict[feature]['cols'][0].format(q, result_name) 
-                                
-                                try:                                
-                                    tmp_df[col_name] = cdf.loc[i,:].values
-                                except:
-                                    ## bug in some fdc-q 
-                                    ## cdf returns tw_buffer (with date index) 
-                                    ## bug seems fixed now -->
-                                    ##      as both fdc_q and length of
-                                    ##      tw_buffer were 7, tw_buffer
-                                    ##      returned as cdf instead of
-                                    ##      cdf with apply function 
-                                    ##      ??? 
-                                    print('failed: ', col_name)
-                                    col_name = None
-
-                        else:
-                            return_col = func_dict[feature]['cols'][0].format(result_name) 
-                            
-                            cdf = tw_buffer.apply(func_dict[feature]['func'])
-                            tmp_df[return_col] = cdf.values 
-                            
-                    if feature in hydro_features:
-                        # print('[CALC] ', feature)  
-                        
-                        return_cols = func_dict[feature]['cols'] 
-                        cdf = tw_buffer.apply(func_dict[feature]['func'])
-                        
-                        # try:
-                        #     cdf = tw_buffer.apply(func_dict[feature]['func'])
-                        # except:
-                        #     cdf = None
-                        
-                        if cdf is not None:
-                            
-                            if len(return_cols) > 1:
-                                for i, col in enumerate(return_cols):
-                                    col_name = col.format(result_name) 
-                                    tmp_df[col_name] = cdf.loc[i,:].values
-                            
-                            else:
-                                col_name = return_cols[0].format(result_name) 
-                                tmp_df[col_name] = cdf.values 
-                                            
-        tmp_df = tmp_df.set_index('ID')    
-        df_out = df_out.append(tmp_df)
-                
-    return df_out
-
-def calc_signatures_nc(ds_buffer, ds_gauge,
-                    features = feature_options, time_window = option_time_window,
-                    fdc_q = [1, 2, 5, 10, 50, 90, 95, 99],
-                    n_alag = [1], n_clag = [0,1]):
-    
-    ## get gauge time range values
-    t_start, t_end = ds_gauge.time[0], ds_gauge.time[-1] 
-    ## select time range in ds_buffer 
-    ds_buffer = ds_buffer.sel(time=slice(t_start, t_end))
-    
-    ## nan mask 
-    nan_mask = ds_gauge.isnull() 
-    ## add nan_mask as extra coordinate 
-    ds_buffer = ds_buffer.assign_coords(nan_mask=("time", nan_mask))
-    ## select only non-nan data (check!)
-    ds_buffer = ds_buffer.where( ds_buffer.nan_mask == False, drop=True) 
-
-
-    ## organize features 
-    stat_features =  [feat for feat in features if feat in stat_options]
-    corr_features =  [feat for feat in features if feat in corr_options]
-    fdc_features =   [feat for feat in features if feat in fdc_options]
-    hydro_features = [feat for feat in features if feat in hydro_options] 
-    
-    ####### 
-    
-    ## loop over time windows 
-    calc_params = [] 
-    
-    for tw in time_window:    
+        time_index = df.index 
         
         if tw == 'all':
-            time_index = np.ones(len(nan_mask)) 
-
+            df['slice'] = 0 
+        
         if tw == 'annual':
-            time_index = ds_gauge.time.dt.year
-            
+            df['slice'] = time_index.year 
+        
         if tw == 'seasonal':
             time_windows = dict(zip(range(1,13), time_format[tw])) 
-            time_index = [ time_windows[month] for month in  ds_gauge.time.dt.month.values ]
-
-        if tw == 'monthly':
-            time_index = ds_gauge.time.dt.month 
+            df['slice'] = time_index.month.map(time_windows)
             
+        if tw == 'monthly':
+            df['slice'] = time_index.month 
+
         if tw == 'weekly':
-            time_index = ds_gauge.time.dt.isocalendar().week
+            df['slice'] = time_index.isocalendar().week
+          
         
-        ## add slice index 
-        ds_buffer = ds_buffer.assign_coords(slicer=("time",time_index)) 
-        ds_gauge = ds_gauge.assign_coords(slicer=("time", time_index))
-        time_subsets = np.unique(time_index) 
-        
-        calc_buffer = ds_buffer.groupby("slicer") 
-        calc_gauge  = ds_gauge.groupby("slicer") 
-        
+        ## calc feature 
         for feature in features:
             
-            if tw == 'all':
-                param_list = ['{}_all'.format(feature)]
-            else:
-                param_list =[ '{f}_{t}_{n}'.format(f=feature, t=tw, n=i) for i in time_subsets]
+            ## get output names
+            result_cols = func_dict[feature]['cols']
             
-            ### calculate each feature in considered time window
-            ### result stored in two dataset arrays 
-            
-            
-            if feature in stat_features:
-                print(feature) 
-                return_params = func_dict[feature]['cols'][0]
+            ## go voer time window 
+            for _slice in df['slice'].unique():
                 
-                result_buffer = calc_buffer.map(func_dict[feature]['func'])
+                ## get data 
+                calc_df = df[ df['slice'] == _slice][calc_cols]
                 
-                # result_buffer = calc_buffer.apply( func_dict[feature]['func']) 
-                # result_gauge = calc_buffer.apply( func_dict[feature]['func']) 
-                print(result_buffer)
+                ## get name 
+                if tw == 'all':
+                    result_name = '{}'.format(tw) 
+                else:
+                    result_name = '{}_{}'.format(tw, _slice) 
                 
-                
+                ## perform calculations 
+                if feature in stat_features:
+                                        
+                    ## calculate statistics 
+                    results = calc_df.apply(func_dict[feature]['func'])  
                     
-            
-            # if 'ccorr' in feature:
-                # print(feature)
-             
-            
-            
-    
-    
-    
-    return 0, 0
+                    ## save 
+                    for i, ix in enumerate(results.index):                      
+                        _col = result_cols[i].format(result_name) 
+                        df_out.loc[ results.columns, _col ] = results.loc[ix] 
+                
+                if feature in corr_features: 
+                                        
+                    if 'acorr' in feature:
+                        
+                        ## loop over lag times 
+                        for i, lag in enumerate(n_alag):
+                            if lag < len(calc_df):
+                                ## calculate lagged correlation
+                                results = calc_df.apply( func_dict[feature]['func'], lag = lag ) 
+                                ## save 
+                                _col = result_cols[i].format(lag, result_name) 
+                                df_out.loc[ results.index, _col ] = results.values 
+                                            
+                    if 'ccorr' in feature: 
+                                                
+                        for i, lag in enumerate(n_clag):
+                            if lag < len(calc_df):
+                                 
+                                ## setup name 
+                                _col = result_cols[0].format(lag, result_name)
+                                
+                                ## calculate cross-correlation per column 
+                                for col in obs_cols:
+                                    result =  func_dict[feature]['func']( calc_df[gauge_col], calc_df[col], lag=lag  ) 
+                                    df_out.loc[col, _col] = result
+                                    
+                if feature in fdc_features: 
+                    
+                    if 'fdc-q' in feature:
+                        
+                        results = calc_df.apply(func_dict[feature]['func'], fdc_q = fdc_q)
+                        
+                        for i, q in enumerate(fdc_q): 
+                            _col = result_cols[0].format(q, result_name)                             
+                            df_out.loc[results.columns, _col] = results.loc[i,:].values 
+                    
+                    else:
+                        
+                        results = calc_df.apply(func_dict[feature]['func']) 
+                        _col = result_cols[0].format(result_name)  
+                        df_out.loc[results.index, _col] = results.values
+                        
+                
+                if feature in hydro_features:
+
+                    results = calc_df.apply(func_dict[feature]['func']) 
+                    
+                    if len(result_cols) > 1:
+                        print(results)
+                        for i, col in enumerate(result_cols):
+                            _col = col.format(result_name) 
+                            print(_col) 
+                            df_out.loc[results.columns, _col] = results.loc[i,:].values
+                            
+                    else:
+                        _col = result_cols[0].format(result_name) 
+                        df_out.loc[results.index, _col] = results.values 
+                        
+    return df_out 
+
 
 
 def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'): 
     
     fn_sim = input_dir / "buffer_{}_size-4.nc".format(gauge_id) 
     fn_obs = obs_dir / '{}_Q_Day.Cmd.txt'.format(gauge_id) 
-    
     
         
     if fn_sim.exists() and fn_obs.exists() and gauge_fn.exists(): 
@@ -1152,12 +1020,15 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         df = df.dropna(subset=[gauge_col])
         
         ## calc signatures 
-        df_signatures = calc_signatures( df )
+        df_signatures = calc_signatures( df, gauge_col,
+                                        time_window = ['all','seasonal']) 
 
         ## calculate similarity vector?
         
         
         ## reshape output of similarity vector to xarray 
+        
+        ## also output of signatures in grid ?
 
         return 1 
 
