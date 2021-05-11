@@ -9,7 +9,10 @@ import pandas as pd
 import numpy as np 
 from pathlib import Path
 from scipy import stats
-import dask.dataframe as dd 
+# import dask.dataframe as dd 
+import xarray as xr 
+
+
 
 ##########################################
 ####       SUPPORT FUNCTIONS          #### 
@@ -849,8 +852,19 @@ def calc_signatures(df_observations, df_simulations, id_col = 'loc_id',
         gauge_col = 'gauge_{}'.format(gauge_id)
         df_buffer[gauge_col] = gauge_ts['value'] 
         
-        ## how to handle missing data?
-        # gauge_null_mask = gauge_ts.isnull().any(axis=1) 
+        ## missing data in observations 
+        ## adapt data availability based on
+        ## observation availability 
+        print(df_buffer.shape)
+        nan_mask = df_buffer[gauge_col].isnull() 
+        print(df_buffer[gauge_col].isnull().sum())
+        
+        df_buffer[nan_mask] = np.nan 
+        
+        print(df_buffer.isnull().sum())
+        # df_buffer = df_buffer.dropna(how='any',
+        #                              subset=[gauge_col])
+        print(df_buffer.shape)        
         
         ## get ID values 
         ts_idx = df_buffer.columns  
@@ -970,9 +984,6 @@ def calc_signatures(df_observations, df_simulations, id_col = 'loc_id',
                             cdf = tw_buffer.apply(func_dict[feature]['func'])
                             tmp_df[return_col] = cdf.values 
                             
-                                                           
-                                             
-                        
                     if feature in hydro_features:
                         # print('[CALC] ', feature)  
                         
@@ -1000,74 +1011,196 @@ def calc_signatures(df_observations, df_simulations, id_col = 'loc_id',
                 
     return df_out
 
-
-
-def pa_calc_signatures_0(gauge_id, fn_simulations, gauge_dir, out_dir): 
+def calc_signatures_nc(ds_buffer, ds_gauge,
+                    features = feature_options, time_window = option_time_window,
+                    fdc_q = [1, 2, 5, 10, 50, 90, 95, 99],
+                    n_alag = [1], n_clag = [0,1]):
     
+    ## get gauge time range values
+    t_start, t_end = ds_gauge.time[0], ds_gauge.time[-1] 
+    ## select time range in ds_buffer 
+    ds_buffer = ds_buffer.sel(time=slice(t_start, t_end))
+    
+    ## nan mask 
+    nan_mask = ds_gauge.isnull() 
+    ## add nan_mask as extra coordinate 
+    ds_buffer = ds_buffer.assign_coords(nan_mask=("time", nan_mask))
+    ## select only non-nan data (check!)
+    ds_buffer = ds_buffer.where( ds_buffer.nan_mask == False, drop=True) 
+
+
+    ## organize features 
+    stat_features =  [feat for feat in features if feat in stat_options]
+    corr_features =  [feat for feat in features if feat in corr_options]
+    fdc_features =   [feat for feat in features if feat in fdc_options]
+    hydro_features = [feat for feat in features if feat in hydro_options] 
+    
+    ####### 
+    
+    ## loop over time windows 
+    calc_params = [] 
+    
+    for tw in time_window:    
+        
+        if tw == 'all':
+            time_index = np.ones(len(nan_mask)) 
+
+        if tw == 'annual':
+            time_index = ds_gauge.time.dt.year
+            
+        if tw == 'seasonal':
+            time_windows = dict(zip(range(1,13), time_format[tw])) 
+            time_index = [ time_windows[month] for month in  ds_gauge.time.dt.month.values ]
+
+        if tw == 'monthly':
+            time_index = ds_gauge.time.dt.month 
+            
+        if tw == 'weekly':
+            time_index = ds_gauge.time.dt.isocalendar().week
+        
+        ## add slice index 
+        ds_buffer = ds_buffer.assign_coords(slicer=("time",time_index)) 
+        ds_gauge = ds_gauge.assign_coords(slicer=("time", time_index))
+        time_subsets = np.unique(time_index) 
+        
+        calc_buffer = ds_buffer.groupby("slicer") 
+        calc_gauge  = ds_gauge.groupby("slicer") 
+        
+        for feature in features:
+            
+            if tw == 'all':
+                param_list = ['{}_all'.format(feature)]
+            else:
+                param_list =[ '{f}_{t}_{n}'.format(f=feature, t=tw, n=i) for i in time_subsets]
+            
+            ### calculate each feature in considered time window
+            ### result stored in two dataset arrays 
+            
+            
+            if feature in stat_features:
+                print(feature) 
+                return_params = func_dict[feature]['cols'][0]
+                
+                result_buffer = calc_buffer.map(func_dict[feature]['func'])
+                
+                # result_buffer = calc_buffer.apply( func_dict[feature]['func']) 
+                # result_gauge = calc_buffer.apply( func_dict[feature]['func']) 
+                print(result_buffer)
+                
+                
+                    
+            
+            # if 'ccorr' in feature:
+                # print(feature)
+             
+            
+            
+    
+    
+    
+    return 0, 0
+
+
+def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'): 
+    
+    fn_sim = input_dir / "buffer_{}_size-4.nc".format(gauge_id) 
+    fn_obs = obs_dir / '{}_Q_Day.Cmd.txt'.format(gauge_id) 
+    
+    
+        
+    if fn_sim.exists() and fn_obs.exists() and gauge_fn.exists(): 
+        
+        df_gauge_meta = pd.read_csv(gauge_fn, index_col=0) 
+        df_gauge_meta = df_gauge_meta.loc[gauge_id] 
+        
+        ## projected value (gauge lat/lon to lisflood grid)
+        gauge_X, gauge_Y = df_gauge_meta[['proj_X', 'proj_Y']].values 
+        df_gauge_meta = None        
+        
+        ## open simulation dataset 
+        ds = xr.open_dataset(fn_sim) 
+        df_sim = ds.to_dataframe().reset_index()
+        
+        ## reshape to dataframe 
+        df = pd.DataFrame() 
+        df['date'] = pd.to_datetime( df_sim['time'].unique() )
+        df = df.set_index('date') 
+        
+        for i, x_cell in enumerate(df_sim['x'].unique()):
+            for j, y_cell in enumerate(df_sim['y'].unique()):
+                
+                _df = df_sim[ (df_sim['x'] == x_cell) & (df_sim['y'] == y_cell)] 
+                
+                cell_id = '{}_{}{}'.format( gauge_id, int(i+1), int(j+1))
+                
+                time_ix = pd.to_datetime( _df['time'] )
+                df.loc[time_ix, cell_id] = _df[var].values 
+                        
+        ## read gauge data 
+        df_gauge, meta = read_gauge_data([fn_obs]) 
+        df_obs = df_gauge[(df_gauge['date'] >= '1991') &  (df_gauge['date'] < '2021')].copy()
+        
+        ## get gauge date range 
+        date_range = pd.to_datetime( df_obs['date'] ) 
+        df_obs = df_obs.set_index(date_range) 
+        
+        ## add gauge observations to dataframe for calculations 
+        gauge_col = '{}_gauge'.format(gauge_id)
+        df[gauge_col] = df_obs['value'] 
+
+        ## drop values based on missing values in gauge observations         
+        df = df.dropna(subset=[gauge_col])
+        
+        ## calc signatures 
+        df_signatures = calc_signatures( df )
+
+        ## calculate similarity vector?
+        
+        
+        ## reshape output of similarity vector to xarray 
+
+        return 1 
+
+    else:
+        print('[ERROR] files not found, skip') 
+        return -1
+    
+    
+  
     ## GET SIMULATION DATA
     ## load simulation data 
-    df_model = dd.read_csv(fn_simulations) 
+    # df_model = dd.read_csv(fn_simulations) 
 
     ## select buffer corresponding with gauge & load into memory 
-    df_model = df_model[ df_model['gauge'] == gauge_id]
-    df_model = df_model.set_index('ID') 
+    # df_model = df_model[ df_model['gauge'] == gauge_id]
+    # df_model = df_model.set_index('ID') 
     
     ## load data into memory 
-    df_model = df_model.compute() 
+    # df_model = df_model.compute() 
     
     ## LOAD GAUGE DATA 
-    gauge_fn = gauge_dir / '{}_Q_Day.Cmd.txt'.format(gauge_id)
+    # gauge_fn = gauge_dir / 
     
-    if gauge_fn.exists():
-        df_gauge, meta = read_gauge_data([gauge_fn]) 
+    # if gauge_fn.exists():
+        # df_gauge, meta = read_gauge_data([gauge_fn]) 
         #df_gauge = df_gauge[ (df_gauge['date'] >= '1991') &  (df_gauge['date'] < '2021')].copy()
         ## TEST 
-        df_gauge = df_gauge[ (df_gauge['date'] >= '1991') &  (df_gauge['date'] < '1994')].copy()
+        # df_gauge = df_gauge[ (df_gauge['date'] >= '1991') &  (df_gauge['date'] < '1994')].copy()
         
-        df_simulations = rows_to_cols(df_model, 'gauge', 'time', 'dis24')
+        # df_simulations = rows_to_cols(df_model, 'gauge', 'time', 'dis24')
 
-        out_df = calc_signatures(df_gauge, df_simulations, time_window=['all']) 
+        # out_df = calc_signatures(df_gauge, df_simulations, time_window=['all']) 
         
-        try:
-            fn_tmp = out_dir / 'signatures_{}.csv'.format(gauge_id) 
-            out_df.to_csv(fn_tmp)
-        except:
-            fn_tmp = None 
+        # try:
+            # fn_tmp = out_dir / 'signatures_{}.csv'.format(gauge_id) 
+            # out_df.to_csv(fn_tmp)
+        # except:
+            # fn_tmp = None 
         
-        return out_df
+        # return out_df
     
-    else:
-        return None 
-    
-def pa_calc_signatures_1(gauge_id, df_model, gauge_dir, out_dir):
-    
-    ## MODEL DATA 
-    df_model = df_model[ df_model['gauge'] == gauge_id].compute()
-    df_model = df_model.set_index('ID')
-
-    ## reshape
-    df_sim = rows_to_cols(df_model, 'gauge', 'time', 'dis24')
-    
-    ## GAUGE DATA 
-    gauge_fn = gauge_dir / '{}_Q_Day.Cmd.txt'.format(gauge_id) 
-    
-    if gauge_fn.exists():
-        df_gauge, meta = read_gauge_data([gauge_fn]) 
-        df_gauge = df_gauge[ (df_gauge['date'] >= '1991') &  (df_gauge['date'] < '2021')] 
-
-        ## calc signatures 
-        out_df = calc_signatures(df_gauge, df_sim, time_window=['all']) 
-        
-        try:
-            ## save intermediate output
-            fn_tmp = out_dir / 'signatures_{}.csv'.format(gauge_id)
-            out_df.to_csv(fn_tmp)
-        except:
-            fn_tmp = None 
-    
-        return out_df 
-
-
+    # else:
+    return 1
 
 
 
