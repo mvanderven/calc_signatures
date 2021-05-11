@@ -200,14 +200,14 @@ def calc_distr_normal(ts, var = 'dis24'):
     
     mu = ts.mean(dim="time")
     sigma = ts.std(dim="time") 
-       
+           
     ## calculate goodness of fit 
     ## create an artificial dataset based on
     ## derived mu and sigma
 
     try:
-        gof = calc_gof(ts, stats.norm.rvs(loc=mu.values, scale=sigma.values, size=len(ts)))
-        _gof = np.ones(mu.values.shape)
+        # gof = calc_gof(ts, stats.norm.rvs(loc=mu.values, scale=sigma.values, size=len(ts)))
+        gof = np.ones(mu.values.shape)
     except:
         gof = np.zeros(mu.values.shape)
 
@@ -221,8 +221,6 @@ def calc_distr_normal(ts, var = 'dis24'):
             "x": ts.x
             }
         )
-
-        
     return return_ds 
 
 def calc_distr_log(ts, eps=1e-6):
@@ -834,18 +832,19 @@ func_dict = {
 def calc_signatures_nc(ds_buffer, ds_gauge,
                     features = feature_options, time_window = option_time_window,
                     fdc_q = [1, 2, 5, 10, 50, 90, 95, 99],
-                    n_alag = [1], n_clag = [0,1]):
-    
+                    n_alag = [1], n_clag = [0,1], var = 'dis24'):
+        
     ## get gauge time range values
     t_start, t_end = ds_gauge.time[0], ds_gauge.time[-1] 
     ## select time range in ds_buffer 
     ds_buffer = ds_buffer.sel(time=slice(t_start, t_end))
-    
+
     ## nan mask  - CHECK REMOVAL NAN
-    nan_mask = ds_gauge.isnull() 
+    nan_mask = ds_gauge[var].isnull().values.flatten()
     ## add nan_mask as extra coordinate 
     ds_buffer = ds_buffer.assign_coords(nan_mask=("time", nan_mask))
     ds_gauge = ds_gauge.assign_coords(nan_mask=("time", nan_mask))
+    
     ## select only non-nan data (check!)
     ds_buffer = ds_buffer.where( ds_buffer.nan_mask == False, drop=True) 
     ds_gauge = ds_gauge.where( ds_gauge.nan_mask == False, drop=True)
@@ -857,7 +856,7 @@ def calc_signatures_nc(ds_buffer, ds_gauge,
     hydro_features = [feat for feat in features if feat in hydro_options] 
     
     ####### 
-    
+
     ## loop over time windows 
     calc_params = [] 
     
@@ -885,7 +884,7 @@ def calc_signatures_nc(ds_buffer, ds_gauge,
         time_subsets = np.unique(time_index) 
         
         calc_buffer = ds_buffer.dis24.groupby("slicer") 
-        calc_gauge  = ds_gauge.groupby("slicer")
+        calc_gauge  = ds_gauge.dis24.groupby("slicer")
         
         for feature in features:
             
@@ -898,11 +897,14 @@ def calc_signatures_nc(ds_buffer, ds_gauge,
             ### result stored in two dataset arrays 
             
             if feature in stat_features:
-
+                # print(feature)
+                
                 if 'norm' in feature:
+                    print(tw,feature)
                     result_buffer = calc_buffer.apply(func_dict[feature]['func']) 
                     result_gauge = calc_gauge.apply(func_dict[feature]['func'])
-                    # print(result_buffer)
+
+                    # print(result_gauge)
             
             # for subset in time_subsets: 
                 # slice_buffer = ds_buffer.where(ds_buffer.slicer == subset, drop=True)
@@ -951,9 +953,8 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn):
     
     fn_sim = input_dir / "buffer_{}_size-4.nc".format(gauge_id) 
     fn_obs = obs_dir / '{}_Q_Day.Cmd.txt'.format(gauge_id) 
+      
     
-    
-        
     if fn_sim.exists() and fn_obs.exists() and gauge_fn.exists(): 
         
         df_gauge_meta = pd.read_csv(gauge_fn, index_col=0) 
@@ -970,14 +971,17 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn):
         df_gauge, meta = read_gauge_data([fn_obs]) 
         df_gauge = df_gauge[(df_gauge['date'] >= '1991') &  (df_gauge['date'] < '2021')].copy()
         
-        ds_obs = xr.DataArray(  df_gauge['value'].values,
-                                coords = [ ("time",df_gauge['date']) ],
-                                dims = ["time"],
-                                attrs = {"lon": df_gauge['lon'].unique()[0],
-                                          "lat": df_gauge['lat'].unique()[0],
-                                          "x": gauge_X,
-                                          "y": gauge_Y} ) 
+        ts_test = df_gauge['value'].values.reshape((len(df_gauge), 1,1)) 
         
+        ds_obs = xr.Dataset( {'dis24': (["time", "y", "x"], ts_test)},
+                            coords = {
+                                "time": (df_gauge['date'].values),
+                                "y": ([gauge_Y]),
+                                "x": ([gauge_X]),
+                                "lat": (df_gauge['lat'].unique()),
+                                "lon": (df_gauge['lon'].unique())
+                                })
+                
         ## calculate signatures 
         sim_signatures, obs_signatures = calc_signatures_nc(ds_sim, ds_obs) #,
                                                             #time_window = ['all'])
