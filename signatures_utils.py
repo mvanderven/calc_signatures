@@ -838,8 +838,8 @@ def calc_signatures(df, gauge_col,
                     fdc_q = [1, 2, 5, 10, 50, 90, 95, 99],
                     n_alag = [1], n_clag = [0,1]):
 
-    print('[START] signature calculation')  
-    
+    print('\n [START] signature calculation')  
+
     calc_cols = df.columns 
     obs_cols = [col for col in calc_cols if not gauge_col in col] 
     
@@ -877,7 +877,7 @@ def calc_signatures(df, gauge_col,
           
         ## calc feature 
         for feature in features:
-            
+            print(' [CALC] {}'.format(feature))
             ## get output names
             result_cols = func_dict[feature]['cols']
             
@@ -895,7 +895,7 @@ def calc_signatures(df, gauge_col,
                 
                 ## perform calculations 
                 if feature in stat_features:
-                                        
+                                     
                     ## calculate statistics 
                     results = calc_df.apply(func_dict[feature]['func'])  
                     
@@ -959,10 +959,50 @@ def calc_signatures(df, gauge_col,
                         _col = result_cols[0].format(result_name) 
                         df_out.loc[results.index, _col] = results.values 
      
-    print('\n[FINISH] signature calculation') 
+    print(' [FINISH] signature calculation') 
     return df_out 
 
+def calc_vector(df_signatures, gauge_id, cols_preserve = ['clag']):
+    print('\n [START] similarity vector calculation')
+    
+    ## list columns for subtraction of gauge signature values
+    ## to observe similarity 
+    cols_intact = [] 
+    for keep_col in cols_preserve:
+        cols = [col for col in df_signatures.columns if keep_col in col] 
+        for col in cols:
+            cols_intact.append(col)
+        
+    cols_subtract = [col for col in df_signatures.columns if col not in cols_intact]  
 
+    ## separate observation and simulation data from signature data 
+    df_obs = df_signatures.loc[gauge_id] 
+    df_sim = df_signatures.drop(index=gauge_id) 
+
+    ## subtract signature values of observations from
+    ## signature values of simulations
+    df_sim[cols_subtract] = df_sim[cols_subtract] - df_obs[cols_subtract] 
+    
+    print('\n [FINISH] similarity vector calculation')
+    return df_sim 
+
+def assign_labels(df, key, gauge_meta):
+    print('\n [START] assigning target labels') 
+    
+    target_X, target_Y = gauge_meta[['Lisflood_X', 'Lisflood_Y']] 
+    
+    target_cell = key[ (key['x'] == target_X) & (key['y'] == target_Y) ]
+        
+    if len(target_cell) > 0:
+        ## target cell in buffer 
+        df['target'] = 0 
+        df.loc[target_cell.index, 'target'] = 1
+    else:
+        ## target cell not in buffer 
+        df['target'] = -1
+    
+    print('\n [FINISH] assigning target labels')
+    return df 
 
 def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'): 
     
@@ -976,17 +1016,20 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         df_gauge_meta = df_gauge_meta.loc[gauge_id] 
         
         ## projected value (gauge lat/lon to lisflood grid)
-        gauge_X, gauge_Y = df_gauge_meta[['proj_X', 'proj_Y']].values 
-        df_gauge_meta = None        
+        # gauge_X, gauge_Y = df_gauge_meta[['proj_X', 'proj_Y']].values 
+        # df_gauge_meta = None        
         
         ## open simulation dataset 
         ds = xr.open_dataset(fn_sim) 
         df_sim = ds.to_dataframe().reset_index()
-        
+
         ## reshape to dataframe 
         df = pd.DataFrame() 
         df['date'] = pd.to_datetime( df_sim['time'].unique() )
         df = df.set_index('date') 
+        
+        ## key between assigned cell_id and location in grid
+        df_key = pd.DataFrame() 
         
         for i, x_cell in enumerate(df_sim['x'].unique()):
             for j, y_cell in enumerate(df_sim['y'].unique()):
@@ -997,7 +1040,9 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
                 
                 time_ix = pd.to_datetime( _df['time'] )
                 df.loc[time_ix, cell_id] = _df[var].values 
-                        
+                
+                df_key.loc[cell_id, ['x', 'y']] = x_cell, y_cell 
+                                
         ## read gauge data 
         df_gauge, meta = read_gauge_data([fn_obs]) 
         df_obs = df_gauge[(df_gauge['date'] >= '1991') &  (df_gauge['date'] < '2021')].copy()
@@ -1015,57 +1060,42 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         
         ## calc signatures 
         df_signatures = calc_signatures( df, gauge_col,
-                                        time_window = ['all','seasonal']) 
+                                        time_window = ['all'],  # 'seasonal'],
+                                          features = ['normal', 'log',
+                                                     'gev', 'gamma', 
+                                                     'n-acorr', 'n-ccorr',
+                                                     'fdc-q', 'fdc-slope', 
+                                                     'lf-ratio', 
+                                                     'bf-index', 'dld', 
+                                                     'rld', 'rbf'] )
         
-        ## calculate similarity vector?
+        ## save signatures 
+        fn_signatures = input_dir / 'signatures_{}.csv'.format(gauge_id) 
+        print(fn_signatures)
+        # df_signatures.to_csv(fn_sigatures)
         
+        ## calculate similarity vector
+        df_similarity_vector = calc_vector(df_signatures, gauge_col)
+            
+        ## label data - identify match
+        df_similarity_vector = assign_labels(df_similarity_vector, df_key, df_gauge_meta) 
+
+        ## save laelled data 
+        fn_similarity = input_dir / 'vector_similarity_{}.csv'.format(gauge_id) 
+        print(fn_similarity) 
+        # df_similarity_vector.to_csv(fn_similarity)
         
+        ## RESHAPE DATA 
         ## reshape output of similarity vector to xarray 
         
-        ## also output of signatures in grid ?
+        ## also output of signatures in grid 
 
         return 1 
 
     else:
         print('[ERROR] files not found, skip') 
         return -1
-    
-    
-  
-    ## GET SIMULATION DATA
-    ## load simulation data 
-    # df_model = dd.read_csv(fn_simulations) 
 
-    ## select buffer corresponding with gauge & load into memory 
-    # df_model = df_model[ df_model['gauge'] == gauge_id]
-    # df_model = df_model.set_index('ID') 
-    
-    ## load data into memory 
-    # df_model = df_model.compute() 
-    
-    ## LOAD GAUGE DATA 
-    # gauge_fn = gauge_dir / 
-    
-    # if gauge_fn.exists():
-        # df_gauge, meta = read_gauge_data([gauge_fn]) 
-        #df_gauge = df_gauge[ (df_gauge['date'] >= '1991') &  (df_gauge['date'] < '2021')].copy()
-        ## TEST 
-        # df_gauge = df_gauge[ (df_gauge['date'] >= '1991') &  (df_gauge['date'] < '1994')].copy()
-        
-        # df_simulations = rows_to_cols(df_model, 'gauge', 'time', 'dis24')
-
-        # out_df = calc_signatures(df_gauge, df_simulations, time_window=['all']) 
-        
-        # try:
-            # fn_tmp = out_dir / 'signatures_{}.csv'.format(gauge_id) 
-            # out_df.to_csv(fn_tmp)
-        # except:
-            # fn_tmp = None 
-        
-        # return out_df
-    
-    # else:
-    return 1
 
 
 
