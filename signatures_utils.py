@@ -1004,6 +1004,67 @@ def assign_labels(df, key, gauge_meta):
     print('\n [FINISH] assigning target labels')
     return df 
 
+def df_to_ds(df, grid_key, gauge_id, data_type):
+    print(' [START] translate dataframe to netcdf')
+    ## find size of grid - square root of number of cells 
+    n_buffer = int( len(df)**0.5 ) 
+    
+    df_vars = df.columns 
+
+    fill_grid = np.zeros(( int(len(df_vars)+1) ,n_buffer, n_buffer)) 
+    lon_grid = np.zeros((n_buffer, n_buffer)) 
+    lat_grid = np.zeros((n_buffer, n_buffer))
+
+    x_out = grid_key['x'].unique() 
+    y_out = grid_key['y'].unique() 
+    
+    ## loop over x_out and y_out 
+    ## based on cell_id
+    ## create multi-dimensional output grid 
+    ## with on each layer a variable 
+    for j, y_cell in enumerate(y_out):
+        for i, x_cell in enumerate(x_out):
+            
+            ## identify cell id to get data 
+            cell_id = grid_key[ (grid_key['x'] == x_cell) & (grid_key['y'] == y_cell) ] 
+                        
+            ## get row of data belonging to each cell 
+            df_data = df.loc[cell_id.index] 
+
+            ## first layer is id of cell 
+            fill_grid[0,j,i] = '{}{}'.format( int(i+1),int(j+1) ) 
+            
+            ## fill remaining layers with data variables 
+            fill_grid[1:,j,i] = df_data.values  
+            
+            ## save lat and lon in separate grids 
+            lon_grid[j,i] = cell_id['lon'].values[0]
+            lat_grid[j,i] = cell_id['lat'].values[0]
+            
+   
+    ## transform numpy array to xarray         
+    ds_out = xr.Dataset( 
+        data_vars = {
+            'id': ( ("y", "x"), fill_grid[0]) 
+            },
+        coords = {
+            "y": (y_out),
+            "x": (x_out),
+            "lon": (("y", "x"), lon_grid),
+            "lat": (("y", "x"), lat_grid)
+            },
+        attrs={"gauge":     gauge_id,
+               "type":      data_type}) 
+    
+    ## add all variables        
+    for n, variable in enumerate(df_vars):
+        n_layer = int(n+1) 
+        ds_out[variable] = ( ("y", "x"), fill_grid[n_layer])
+    
+    print(' [FINISH] translate dataframe to netcdf')        
+    return ds_out 
+
+
 def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'): 
     
     fn_sim = input_dir / "buffer_{}_size-4.nc".format(gauge_id) 
@@ -1014,10 +1075,6 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         
         df_gauge_meta = pd.read_csv(gauge_fn, index_col=0) 
         df_gauge_meta = df_gauge_meta.loc[gauge_id] 
-        
-        ## projected value (gauge lat/lon to lisflood grid)
-        # gauge_X, gauge_Y = df_gauge_meta[['proj_X', 'proj_Y']].values 
-        # df_gauge_meta = None        
         
         ## open simulation dataset 
         ds = xr.open_dataset(fn_sim) 
@@ -1035,14 +1092,19 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
             for j, y_cell in enumerate(df_sim['y'].unique()):
                 
                 _df = df_sim[ (df_sim['x'] == x_cell) & (df_sim['y'] == y_cell)] 
-                
+
                 cell_id = '{}_{}{}'.format( gauge_id, int(i+1), int(j+1))
                 
                 time_ix = pd.to_datetime( _df['time'] )
                 df.loc[time_ix, cell_id] = _df[var].values 
                 
+                ## save x,y and cell id 
                 df_key.loc[cell_id, ['x', 'y']] = x_cell, y_cell 
-                                
+                
+                lat_cell = _df['lat'].unique()[0] 
+                lon_cell = _df['lon'].unique()[0]
+                df_key.loc[cell_id, ['lat', 'lon']] = lat_cell, lon_cell
+                                        
         ## read gauge data 
         df_gauge, meta = read_gauge_data([fn_obs]) 
         df_obs = df_gauge[(df_gauge['date'] >= '1991') &  (df_gauge['date'] < '2021')].copy()
@@ -1060,19 +1122,11 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         
         ## calc signatures 
         df_signatures = calc_signatures( df, gauge_col,
-                                        time_window = ['all'],  # 'seasonal'],
-                                          features = ['normal', 'log',
-                                                     'gev', 'gamma', 
-                                                     'n-acorr', 'n-ccorr',
-                                                     'fdc-q', 'fdc-slope', 
-                                                     'lf-ratio', 
-                                                     'bf-index', 'dld', 
-                                                     'rld', 'rbf'] )
+                                        time_window = ['all', 'seasonal'])
         
         ## save signatures 
         fn_signatures = input_dir / 'signatures_{}.csv'.format(gauge_id) 
-        print(fn_signatures)
-        # df_signatures.to_csv(fn_sigatures)
+        df_signatures.to_csv(fn_signatures)
         
         ## calculate similarity vector
         df_similarity_vector = calc_vector(df_signatures, gauge_col)
@@ -1080,16 +1134,30 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         ## label data - identify match
         df_similarity_vector = assign_labels(df_similarity_vector, df_key, df_gauge_meta) 
 
-        ## save laelled data 
+        ## save labelled data 
         fn_similarity = input_dir / 'vector_similarity_{}.csv'.format(gauge_id) 
-        print(fn_similarity) 
-        # df_similarity_vector.to_csv(fn_similarity)
+        df_similarity_vector.to_csv(fn_similarity)
         
         ## RESHAPE DATA 
-        ## reshape output of similarity vector to xarray 
+        ## reshape output of similarity vector to xarray  
+        ds_similarity = df_to_ds(df_similarity_vector, df_key,
+                                 gauge_id, 'similarity vector') 
+        ## save output
+        fn_similarity_nc = input_dir / 'vector_similarity_{}.nc'.format(gauge_id) 
+        ds_similarity.to_netcdf(fn_similarity_nc)
         
         ## also output of signatures in grid 
-
+        ## first label signature data 
+        df_signatures_label = df_signatures.iloc[:-1].copy() 
+        df_signatures_label['target'] = df_similarity_vector['target']
+        
+        ## reshape data to grid 
+        ds_signatures = df_to_ds(df_signatures_label, key,
+                                  gauge_id, 'signatures')
+        ## save output
+        fn_signatures_nc = input_dir / 'signatures_{}.nc'.format(gauge_id)
+        ds_signatures.to_netcdf( fn_signatures_nc)
+        
         return 1 
 
     else:
