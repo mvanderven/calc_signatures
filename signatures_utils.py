@@ -1139,6 +1139,7 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         df_similarity_vector.to_csv(fn_similarity)
         
         ## RESHAPE DATA 
+        ## FROM DATAFRAME TO NETCDF
         ## reshape output of similarity vector to xarray  
         ds_similarity = df_to_ds(df_similarity_vector, df_key,
                                  gauge_id, 'similarity vector') 
@@ -1152,8 +1153,8 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         df_signatures_label['target'] = df_similarity_vector['target']
         
         ## reshape data to grid 
-        ds_signatures = df_to_ds(df_signatures_label, key,
-                                  gauge_id, 'signatures')
+        ds_signatures = df_to_ds(df_signatures_label, df_key,
+                                 gauge_id, 'signatures')
         ## save output
         fn_signatures_nc = input_dir / 'signatures_{}.nc'.format(gauge_id)
         ds_signatures.to_netcdf( fn_signatures_nc)
