@@ -5,23 +5,17 @@ Created on Fri Apr 30 16:00:48 2021
 @author: mvand
 """
 
-import pandas as pd 
+
 from pathlib import Path
-import xarray as xr 
-
 from signatures_utils import pa_calc_signatures
-# from signatures_utils_nc import pa_calc_signatures 
+import time 
+from pathos.threading import ThreadPool as Pool
 
+# import pandas as pd 
+# import xarray as xr 
 # import pathos as pa 
 # import dask.dataframe as dd 
 # import numpy as np 
-
-import time 
-
-from pathos.threading import ThreadPool as Pool
-
-## TO DO -- rewrite voor nc files 
-
 
 #%% Define pathos functions 
 
@@ -34,13 +28,14 @@ def run_parallel(input_dir):
     dir_gauges = input_dir / 'V1_gauge_obs'
 
     ## TEST PC
+    ## run took 9.01 mins 
     gauge_ids = [6221500, 6731010] 
     
     ## get list of gauge ids 
     # df_gauges = pd.read_csv(fn_gauges, index_col=0)   
     
     ## TEST SCALE     
-    # gauge_ids = df_gauges.sample(n=50).index.values
+    # gauge_ids = df_gauges.sample(n=24).index.values
     # splitted_gauge_ids = np.array_split(gauge_ids, 5) 
     
     ## LARGE SCALE  
@@ -60,7 +55,7 @@ def run_parallel(input_dir):
     ## set up pool 
     p = Pool() 
     
-    ## conduct calculations
+    ## do  calculations
     results = p.map(pa_calc_signatures, gauge_ids, list_wkdir, list_gauge_dir, list_gauge_file) 
                 
     print(' [END] parellel run - finished in {:.2f} minutes'.format( (time.time()-time_parallel)/60.  )) 
@@ -77,11 +72,7 @@ if __name__ == '__main__':
     
     ## run 
     results = run_parallel(input_dir) 
-    
-    ## output 
-    # fn_out = input_dir / 'signatures_tw-test_drop.csv'
-    # results.to_csv(fn_out)
-    
+        
     print(' [INFO] Total time: {:.2f} minutes'.format( (time.time() - time_total)/60. ))
 
 

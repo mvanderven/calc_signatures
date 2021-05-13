@@ -1158,10 +1158,10 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         ## save output
         fn_signatures_nc = input_dir / 'signatures_{}.nc'.format(gauge_id)
         ds_signatures.to_netcdf( fn_signatures_nc)
-        
         return 1 
 
     else:
+        
         print('[ERROR] files not found, skip') 
         return -1
 
