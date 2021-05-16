@@ -28,7 +28,7 @@ def run_parallel(input_dir):
     dir_gauges = input_dir / 'V1_gauge_obs'
 
     ## TEST PC
-    ## run took 9.01 mins 
+    ## run took 9 - 9.5 mins 
     gauge_ids = [6221500, 6731010] 
     
     ## get list of gauge ids 
