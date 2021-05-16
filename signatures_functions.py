@@ -8,7 +8,6 @@ Created on Sun May 16 09:34:18 2021
 
 import pandas as pd 
 import numpy as np 
-# from pathlib import Path
 from scipy import stats
 
 
