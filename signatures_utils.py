@@ -337,8 +337,6 @@ def calc_signatures(df, gauge_col,
                     in each output column a feature value.
     '''
     
-    print(feature_options)
-    
     print('\n [START] signature calculation')  
 
     calc_cols = df.columns 
@@ -349,7 +347,6 @@ def calc_signatures(df, gauge_col,
     corr_features =  [feat for feat in features if feat in corr_options]
     fdc_features =   [feat for feat in features if feat in fdc_options]
     hydro_features = [feat for feat in features if feat in hydro_options] 
-
 
     df_out = pd.DataFrame() 
     df_out['ID'] = calc_cols 
@@ -464,6 +461,37 @@ def calc_signatures(df, gauge_col,
     return df_out 
 
 def calc_vector(df_signatures, gauge_id, cols_preserve = ['clag']):
+    
+    '''
+    Functions that takes a dataframe containing signature values from 
+    one observation point and corresponding simulations and calculates 
+    similarities of simulations with observations. 
+    
+    INPUT
+        df_signatures   dataframe with signature values - each row contains
+                        a unique simulation or observation, with signature
+                        values in columns. Unique IDs in index. 
+        
+        gauge_id        the ID of the row containing observation signatures,
+                        used to compare the simulation signatures with 
+        
+        cols_preserve   columns that are left out of the similarity 
+                        calculation. Input as list with string values.
+                        
+                        Example (& default value):
+                            cors_preserve = ['clag']
+                            
+                            Since 'clag' is cross-correlation, it is already
+                            a measurement of similarity and does not need
+                            to be taken into account
+    
+    OUTPUT
+        df_sim          a dataframe with on each row a similarity values
+                        of simulations with observations, with in each 
+                        column a similarity feature value 
+    '''
+    
+    
     print('\n [START] similarity vector calculation')
     
     ## list columns for subtraction of gauge signature values
@@ -488,6 +516,33 @@ def calc_vector(df_signatures, gauge_id, cols_preserve = ['clag']):
     return df_sim 
 
 def assign_labels(df, key, gauge_meta):
+    
+    '''
+    Function that assigns target labels to features as preparation for
+    a predictive algorithm 
+    
+    INPUT
+        df          dataframe containing feature values belonging to 
+                    samples 
+        
+        key         link between df and gauge_meta - sample ID in df 
+                    is looked up in key to match with gauge_meta
+        
+        gauge_meta  dataframe containing target values, is linked through
+                    'key' with df 
+    
+    OUTPUT
+        df          a dataframe with an additional column 'target',
+                    in which all samples have a value 0, 1 or -1.
+                    
+                    In the first case, if the target value is found in the
+                    available samples, the target sample is labelled with 1,
+                    while the other samples are labelled with 0.
+                    
+                    In other cases, if the target value is not found in the
+                    available samples, all samples are labelled with -1.
+    '''
+        
     print('\n [START] assigning target labels') 
     
     target_X, target_Y = gauge_meta[['Lisflood_X', 'Lisflood_Y']] 
@@ -505,7 +560,29 @@ def assign_labels(df, key, gauge_meta):
     print('\n [FINISH] assigning target labels')
     return df 
 
-def df_to_ds(df, grid_key, gauge_id, data_type):
+def df_to_ds(df, grid_key, gauge_id, data_type): 
+    
+    '''
+    Function that transforms all data in a dataframe ('df'), with the help
+    of a key ('grid_key') into a xarray dataset
+    
+    INPUT
+        df          dataframe with samples on each row and features in 
+                    columns, identified by IDs in index 
+        
+        grid_key    dataframe linked with IDs in index, identical to 
+                    IDs in 'df', containing spatial data of each sample 
+        
+        gauge_id    overall identifier of samples (simulations) belonging
+                    to gauge observations
+        
+        data_type   description of data type 
+    
+    OUTPUT
+        ds_out      xarray dataset with feature data of each sample in a 
+                    spatial grid 
+    '''
+        
     print(' [START] translate dataframe to netcdf')
     ## find size of grid - square root of number of cells 
     n_buffer = int( len(df)**0.5 ) 
@@ -567,6 +644,26 @@ def df_to_ds(df, grid_key, gauge_id, data_type):
 
 
 def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'): 
+    
+    '''
+    Function that takes data of a single gauge and observations and prepares
+    signature calculations 
+    
+    INPUT 
+        gauge_id    ID matching with a GRDC gauge 
+                     
+        input_dir   directory containing simulation data 
+        
+        obs_dir     directory containing gauge observation data 
+        
+        gauge_fn    file containing gauge metadata 
+        
+        var         name of variable in simulation data 
+    
+    OUTPUT
+        1 / -1      If succesful, returns 1, else -1 
+    
+    '''
     
     fn_sim = input_dir / "buffer_{}_size-4.nc".format(gauge_id) 
     fn_obs = obs_dir / '{}_Q_Day.Cmd.txt'.format(gauge_id) 
