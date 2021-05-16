@@ -7,9 +7,7 @@ Created on Fri Apr 30 16:02:05 2021
 
 import pandas as pd 
 import numpy as np 
-from pathlib import Path
-# from scipy import stats
-# import dask.dataframe as dd 
+from pathlib import Path 
 import xarray as xr 
 
 import signatures_functions 
@@ -152,7 +150,9 @@ def rows_to_cols(df, id_col, index_col, target_col, resample_24hr = False):
 
 
 ##########################################
-####       FEATURE FUNCTIONS          #### 
+####     ORGANIZE FEATURE TYPES       ####
+####               &                  ####
+####          TIME WINDOWS            #### 
 ##########################################
 
 #### FEATURE TYPES 
@@ -178,7 +178,6 @@ for key in feature_keys:
         feature_options.append(val)
 
 
-#### TIME WINDOW 
 option_time_window = ['all', 'annual', 'seasonal', 'monthly', 'weekly']
 time_format = {
     'all':          [':'],
@@ -188,10 +187,11 @@ time_format = {
     'weekly':       ['W']}
 
 
-
-
 ##########################################
 ####            OVERVIEW              #### 
+####   dictionary to call feature     #### 
+####   functions with named output    #### 
+####            variables             ####
 ##########################################
  
 func_dict = {
@@ -258,13 +258,87 @@ func_dict = {
     }
 
 
-
-
 def calc_signatures(df, gauge_col,
                     features = feature_options, time_window = option_time_window,
                     fdc_q = [1, 2, 5, 10, 50, 90, 95, 99],
                     n_alag = [1], n_clag = [0,1]):
-
+    
+    '''
+    Function that calculates given features with specified time windows. 
+    
+    INPUT
+        df          dataframe with observations on each row, indexed with
+                    a datetime index
+                    in each column, observations of a different location 
+                    can be found, with column name the identifier of the
+                    location 
+                    
+        gauge_col   the column name of the observation column, the rest
+                    of the columns are assumed to be simulation columns
+        
+        features    names of the features to be calculated in list. 
+                    if nothing is selected, all
+                    available features are calculated 
+                    
+                    Options:
+                        Statistical distributions: 
+                            normal, log-normal, gumbel & gamma
+                            ['normal', 'log', 'gev', 'gamma']
+                            
+                        Correlation:
+                            n-lagged autocorrelation, n-lagged cross-
+                            correlation (observations with simulations)
+                            ['n-acorr', 'n-ccor']
+                            
+                        FDC:
+                            i-th quantile of FDC, slope of FDC, 
+                            low flow index 
+                            ['fdc-q', 'fdc-slope', 'lf-ratio']
+                            
+                        Hydro inidices:
+                            baseflow index, declining limb density,
+                            rising limb density, Richard-Baker Flashiness,
+                            recession curve parameters 
+                            ['bf-index', 'dld', 'rld', 'rbs', 'src']
+        
+        time_window time spans over which signatures are calculated. 
+                    Options:                    
+                        ['all', 'annual', 'seasonal', 'monthly', 'weekly']
+                        
+        fdc_q       If quantiles of FDC ['fdc-q'] are calculated, the
+                    desired quantiles can be specified in a list 
+                    with integers. 
+                    
+                    Example:
+                        fdc_q = [1, 50, 99] 
+                        will calculate the 1st, 50th and 99th quantile of 
+                        the flow duration curve
+        
+        n_alag      If n-lagged autocorrelation ['n-acorr'] is calculated,
+                    the target lag(s) can be specified in a list 
+                    with integers. 
+                    
+                    Example:
+                        n_alag = [1, 5] will calculate the 1 and 5 lagged
+                        autocorrelation of the time series 
+        
+        n_clag      If n-lagged cross-correlation ['n-ccorr'] is calculated,
+                    the target lag(s) can be specified in a list with 
+                    integers.
+                    
+                    Example:
+                        n_alag = [0,1] will calculate the 0-lag and 1-lag 
+                        cross correlation of simulated and observed [gauge_col]
+                        timeseries.    
+    
+    OUTPUT
+        df_out      Dataframe with calculated features - on each row the
+                    features belonging to an input column can be found, with 
+                    in each output column a feature value.
+    '''
+    
+    print(feature_options)
+    
     print('\n [START] signature calculation')  
 
     calc_cols = df.columns 
