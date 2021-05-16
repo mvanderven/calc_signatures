@@ -67,8 +67,8 @@ if __name__ == '__main__':
     time_total = time.time() 
 
     ## cartesius environment 
-    #input_dir = Path("/scratch-shared/mizzivdv/signatures_V1_input/")
-    input_dir = Path(r"C:\Users\mvand\Documents\Master EE\Year 4\Thesis\data\dev") 
+    input_dir = Path("/scratch-shared/mizzivdv/signatures_nc_V1_input/")
+    #input_dir = Path(r"C:\Users\mvand\Documents\Master EE\Year 4\Thesis\data\dev") 
     
     ## run 
     results = run_parallel(input_dir) 
