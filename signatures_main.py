@@ -41,10 +41,7 @@ def run_parallel(input_dir):
     ## LARGE SCALE  
     #gauge_ids = df_gauges.index.values
     #splitted_gauge_ids = np.array_split(gauge_ids, 75)  
-    
-    ## get empty dataframe for total collection 
-    # df_out = pd.DataFrame()
-    
+        
     print('\n [START] parellel run')
     time_parallel = time.time() 
     
@@ -68,7 +65,7 @@ if __name__ == '__main__':
 
     ## cartesius environment 
     input_dir = Path("/scratch-shared/mizzivdv/signatures_nc_V1_input/")
-    #input_dir = Path(r"C:\Users\mvand\Documents\Master EE\Year 4\Thesis\data\dev") 
+    # input_dir = Path(r"C:\Users\mvand\Documents\Master EE\Year 4\Thesis\data\dev") 
     
     ## run 
     results = run_parallel(input_dir) 
