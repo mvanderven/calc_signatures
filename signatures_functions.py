@@ -14,6 +14,7 @@ from scipy import stats
 ##########################################
 ####         STAT FUNCTIONS           ####
 ##########################################
+
 def calc_gof(model, stat):
     
     ###################### SAVED BUT NOT IMPLEMENTED
@@ -349,12 +350,12 @@ def calc_i_bf(ts):
         else:
             ts = ts.fillna(method='ffill').dropna() 
             
-    #### following formatting by Sawicz (2011)
+    #### following parameter formatting by Sawicz (2011)
     Q_t  = ts.values 
     Q_D = np.zeros(len(Q_t)) 
     
     ## set initial value equal to surface flow 
-    Q_D[0] = Q_t[0] # * factor?
+    Q_D[0] = Q_t[0] 
         
     #### Value of c determined by Eckhardt (2007) A comparison of baseflow 
     #### indices, which were cal-culated with seven different baseflow 
@@ -365,9 +366,12 @@ def calc_i_bf(ts):
     for i in range(len(Q_t)-1):
         Q_D[i+1] = (c * Q_D[i]) + ( ( (1+c)*0.5 ) * (Q_t[i+1] - Q_t[i]) )
     
+    ## mask Q_D values below zero 
+    Q_D[Q_D<0] = 0.
+    
     #### (2) Subtract direct flow from total flow to extract baseflow 
     Q_B = Q_t - Q_D  
-    
+        
     #### (3) Calculate baseflow index 
     if sum(Q_B) > 0 and sum(Q_t) > 0:
         return sum(Q_B) / sum(Q_t)
