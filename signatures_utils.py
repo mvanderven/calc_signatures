@@ -165,8 +165,7 @@ def rows_to_cols(df, id_col, index_col, target_col, resample_24hr = False):
 
 #### FEATURE TYPES 
 sorted_features = {
-    # 'stats':        ['normal', 'log', 'gev', 'gamma', 'poisson'],
-    'stats':        ['normal', 'log', 'gev', 'gamma'],
+    'stats':        ['normal', 'log', 'gev', 'gamma', 'poisson'],
     'correlation':  ['n-acorr', 'n-ccorr'],
     'fdc':          ['fdc-q', 'fdc-slope', 'lf-ratio'],
     'hydro':        ['bf-index', 'dld', 'rld', 'rbf', 'src']
@@ -221,7 +220,7 @@ func_dict = {
         },
     'poisson':  {
          'func': signatures_functions.calc_distr_poisson,
-        'cols': ['Pl-{}']       
+        'cols': ['Pl-{}', 'P-gof-{}']       
         },
     'n-acorr':  {
          'func': signatures_functions.calc_auto_correlation,
@@ -401,10 +400,10 @@ def calc_signatures(df, gauge_col,
                 
                 ## perform calculations 
                 if feature in stat_features:
-                                     
+                    
                     ## calculate statistics 
                     results = calc_df.apply(func_dict[feature]['func'])  
-                    
+                                        
                     ## save 
                     for i, ix in enumerate(results.index):                      
                         _col = result_cols[i].format(result_name) 
@@ -755,8 +754,6 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
                 df_key.loc[cell_id, 'upArea'] = _df['upArea'].unique()[0] 
                 
                 ## save distance to center cell 
-                df_key.loc[cell_id, 'cell_X'] = abs(x_center - i) 
-                df_key.loc[cell_id, 'cell_Y'] = abs(y_center - j)
                 df_key.loc[cell_id, 'n_buffer'] = max(  abs(x_center - i) ,  abs(y_center - j) )
 
 
