@@ -468,7 +468,7 @@ def calc_signatures(df, gauge_col,
     print(' [FINISH] signature calculation') 
     return df_out 
 
-def calc_vector(df_signatures, gauge_id, cols_preserve = ['clag']):
+def calc_vector(df_signatures, gauge_id, cols_preserve = ['clag', 'n_buffer']):
     
     '''
     Functions that takes a dataframe containing signature values from 
@@ -725,7 +725,15 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         ## key between assigned cell_id and location in grid
         df_key = pd.DataFrame() 
         
+        ## shape 
+        nx = df_sim['x'].nunique()
+        ny = df_sim['y'].nunique() 
+        
+        x_center = int( nx / 2) 
+        y_center = int( ny / 2)        
+        
         for i, x_cell in enumerate(df_sim['x'].unique()):
+            
             for j, y_cell in enumerate(df_sim['y'].unique()):
                 
                 _df = df_sim[ (df_sim['x'] == x_cell) & (df_sim['y'] == y_cell)] 
@@ -744,8 +752,14 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
                 df_key.loc[cell_id, ['lat', 'lon']] = lat_cell, lon_cell 
                 
                 ## save cell upArea
-                df_key.loc[cell_id, 'upArea'] = _df['upArea'].unique()[0]
-                                        
+                df_key.loc[cell_id, 'upArea'] = _df['upArea'].unique()[0] 
+                
+                ## save distance to center cell 
+                df_key.loc[cell_id, 'cell_X'] = abs(x_center - i) 
+                df_key.loc[cell_id, 'cell_Y'] = abs(y_center - j)
+                df_key.loc[cell_id, 'n_buffer'] = max(  abs(x_center - i) ,  abs(y_center - j) )
+
+
         ## read gauge data 
         df_gauge, meta = read_gauge_data([fn_obs]) 
         df_obs = df_gauge[(df_gauge['date'] >= '1991') &  (df_gauge['date'] < '2021')].copy()
@@ -755,94 +769,96 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         df_obs = df_obs.set_index(date_range) 
         
         ## add gauge observations to dataframe for calculations 
-        gauge_col = '{}_gauge'.format(gauge_id)
-        df[gauge_col] = df_obs['value'] 
+        gauge_idx = '{}_gauge'.format(gauge_id)
+        df[gauge_idx] = df_obs['value'] 
         
         ## drop values based on missing values in gauge observations         
-        df = df.dropna(subset=[gauge_col])
+        df = df.dropna(subset=[gauge_idx])
         
         ## calc signatures 
-        df_signatures = calc_signatures( df, gauge_col,
-                                        time_window = ['all']) #, 'seasonal'])
+        df_signatures = calc_signatures( df, gauge_idx,
+                                        time_window = ['all', 'seasonal'])
+        
+        ## add buffer distance to center (for later filtering of distances) 
+        df_signatures['n_buffer'] = 0 
+        df_signatures.loc[df_key.index, 'n_buffer'] = df_key['n_buffer'] 
+        
+        ## also add coordinates 
+        coord_pars = ['x', 'y', 'lat', 'lon']
+        for parameter in coord_pars:
+            df_signatures.loc[gauge_idx, parameter] = df_obs[parameter].unique()[0]
+            df_signatures.loc[df_key.index, parameter] = df_key[parameter]
         
         #### add upArea 
         ## also a static file to extract simulations
         ## upArea exists 
         # upArea_file = input_dir/ 'EFAS_upArea4.0.nc'
         # print('A: ', upArea_file.exists())
-        
         cell_upArea = df_key['upArea']                         ## in m2             
         gauge_upArea = df_gauge['upArea'].unique()[0] * 10**6  ## from km2 to m2
         
-        df_signatures.loc[ gauge_col, 'upArea'] = gauge_upArea 
-        df_signatures.loc[cell_upArea.index, 'upArea'] = cell_upArea
+        df_signatures.loc[ gauge_idx, 'upArea'] = gauge_upArea 
+        df_signatures.loc[ cell_upArea.index, 'upArea'] = cell_upArea
     
-        ## add elevation 
+        ## add elevation values 
         dem_file = input_dir / 'EFAS_dem.nc'
         if dem_file.exists(): 
             
             cell_elevation = extract_ncfile(df_key, dem_file, 'elevation')['elevation'] 
             gauge_elevation = df_gauge['elevation'].unique()[0] 
             
-            df_signatures.loc[ gauge_col, 'elevation'] = gauge_elevation 
+            df_signatures.loc[ gauge_idx, 'elevation'] = gauge_elevation 
             df_signatures.loc[ cell_elevation.index, 'elevation'] = cell_elevation
-        
-        print(df_signatures) 
-        
+               
+        ## label signatures 
+        df_signatures = assign_labels(df_signatures, df_key, df_gauge_meta) 
+        ## rename the gauge label
+        df_signatures.loc[ gauge_idx, 'target'] = np.nan 
+                
         ## save signatures 
         fn_signatures = input_dir / 'signatures_{}.csv'.format(gauge_id) 
-        # df_signatures.to_csv(fn_signatures)
+        df_signatures.to_csv(fn_signatures)
+        
         
         ## calculate similarity vector
-        df_similarity_vector = calc_vector(df_signatures, gauge_col)
-            
+        df_similarity_vector = calc_vector(df_signatures.drop(['target'], axis=1), gauge_idx)
         ## label data - identify match
         df_similarity_vector = assign_labels(df_similarity_vector, df_key, df_gauge_meta) 
-
         ## save labelled data 
         fn_similarity = input_dir / 'vector_similarity_{}.csv'.format(gauge_id) 
-        # df_similarity_vector.to_csv(fn_similarity)
+        df_similarity_vector.to_csv(fn_similarity)
         
         ## RESHAPE DATA 
         ## FROM DATAFRAME TO NETCDF
+        
+        ## drop coordinate data 
+        df_similarity_vector = df_similarity_vector.drop(coord_pars, axis=1)
+        df_signatures = df_signatures.drop(coord_pars, axis=1)
         
         ## reshape output of similarity vector to xarray  
         ds_similarity = df_to_ds(df_similarity_vector, df_key,
                                  gauge_id, 'similarity vector') 
         ## save output
         fn_similarity_nc = input_dir / 'vector_similarity_{}.nc'.format(gauge_id) 
-        # ds_similarity.to_netcdf(fn_similarity_nc)
+        ds_similarity.to_netcdf(fn_similarity_nc)
         
         ## also output of signatures in grid 
-        ## first label signature data 
-        df_signatures_label = df_signatures.iloc[:-1].copy() 
-        df_signatures_label['target'] = df_similarity_vector['target']
+        ## without gauge signature data 
+        df_signatures = df_signatures.iloc[:-1].copy() 
         
         ## reshape data to grid 
-        ds_signatures = df_to_ds(df_signatures_label, df_key,
+        ds_signatures = df_to_ds(df_signatures, df_key,
                                  gauge_id, 'signatures')
+
         ## save output
         fn_signatures_nc = input_dir / 'signatures_{}.nc'.format(gauge_id)
-        # ds_signatures.to_netcdf( fn_signatures_nc)
+        ds_signatures.to_netcdf( fn_signatures_nc)
         return 1 
 
     else:
         
         print('[ERROR] files not found, skip') 
         return -1
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
