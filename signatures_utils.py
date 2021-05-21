@@ -100,7 +100,15 @@ def read_gauge_data(fn_list, transform = False, src_proj = None, dst_proj = None
 
             if 'area' in vals:
                 meta['upArea(km2)'] = float(vals[-1])
-                temp_df['upArea'] = meta['upArea(km2)']
+                temp_df['upArea'] = meta['upArea(km2)'] 
+            
+            if 'Altitude' in vals:
+                elevation = float(vals[-1]) 
+                if elevation <= -999.:
+                    elevation = np.nan 
+                    
+                meta['elevation'] = elevation 
+                temp_df['elevation'] = meta['elevation']
 
             if 'Content:' in vals:
                 meta['description'] = ' '.join( vals[-3:] ).replace('\n', '').lower()
@@ -706,6 +714,8 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         ## read gauge data 
         df_gauge, meta = read_gauge_data([fn_obs]) 
         df_obs = df_gauge[(df_gauge['date'] >= '1991') &  (df_gauge['date'] < '2021')].copy()
+        print(df_gauge.head()) 
+        print(df_gauge.columns)
         
         ## get gauge date range 
         date_range = pd.to_datetime( df_obs['date'] ) 
@@ -719,12 +729,20 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         df = df.dropna(subset=[gauge_col])
         
         ## calc signatures 
-        df_signatures = calc_signatures( df, gauge_col,
-                                        time_window = ['all', 'seasonal'])
+        # df_signatures = calc_signatures( df, gauge_col,
+                                        # time_window = ['all']) #, 'seasonal'])
         
+        ## add upArea and elevation from static files file 
+        print(input_dir) 
+        dem_file = input_dir / 'EFAS_dem.nc'
+        print('dem: ', dem_file.exists()) 
+        upArea_file = input_dir/ 'EFAS_upArea4.0.nc'
+        print('A: ', upArea_file.exists())
+        
+        print(df_signatures.columns)
         ## save signatures 
         fn_signatures = input_dir / 'signatures_{}.csv'.format(gauge_id) 
-        df_signatures.to_csv(fn_signatures)
+        # df_signatures.to_csv(fn_signatures)
         
         ## calculate similarity vector
         df_similarity_vector = calc_vector(df_signatures, gauge_col)
@@ -734,16 +752,17 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
 
         ## save labelled data 
         fn_similarity = input_dir / 'vector_similarity_{}.csv'.format(gauge_id) 
-        df_similarity_vector.to_csv(fn_similarity)
+        # df_similarity_vector.to_csv(fn_similarity)
         
         ## RESHAPE DATA 
         ## FROM DATAFRAME TO NETCDF
+        
         ## reshape output of similarity vector to xarray  
         ds_similarity = df_to_ds(df_similarity_vector, df_key,
                                  gauge_id, 'similarity vector') 
         ## save output
         fn_similarity_nc = input_dir / 'vector_similarity_{}.nc'.format(gauge_id) 
-        ds_similarity.to_netcdf(fn_similarity_nc)
+        # ds_similarity.to_netcdf(fn_similarity_nc)
         
         ## also output of signatures in grid 
         ## first label signature data 
@@ -755,7 +774,7 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
                                  gauge_id, 'signatures')
         ## save output
         fn_signatures_nc = input_dir / 'signatures_{}.nc'.format(gauge_id)
-        ds_signatures.to_netcdf( fn_signatures_nc)
+        # ds_signatures.to_netcdf( fn_signatures_nc)
         return 1 
 
     else:
