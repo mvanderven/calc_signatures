@@ -651,10 +651,34 @@ def df_to_ds(df, grid_key, gauge_id, data_type):
     return ds_out 
 
 
-def extract_ncfile(df_loc, nc_file, parameter_name):
+def extract_ncfile(df_loc, nc_file, feature_name, ds_parameter = 'dem_mean'):
     
+    ## open dataset 
     ds = xr.open_dataset(nc_file)
-    print(ds)
+    
+    ## get x and y values     
+    search_x = df_loc['x'].unique()
+    search_y = df_loc['y'].unique() 
+    
+    ## create a searching area  
+    mask_x = ( ds['x'] >= min(search_x) ) & ( ds['x'] <= max(search_x) )
+    mask_y = ( ds['y'] >= min(search_y) ) & ( ds['y'] <= max(search_y) ) 
+    
+    ## execute mask search 
+    ds_search = ds.where( mask_x & mask_y, drop=True) 
+    
+    ## convert data to dataframe 
+    df_search = ds_search.to_dataframe().reset_index()
+    
+    ## loop through search dataframe
+    ## find correct values by matching x and y 
+    for ix in df_search.index:
+        search_result = df_search.loc[ix]
+                        
+        ## assign value 
+        df_loc.loc[ (df_loc['x']  == search_result['x']) &
+                    (df_loc['y']  == search_result['y']),
+                    feature_name ] = search_result[ds_parameter] 
     return df_loc 
 
 
@@ -741,8 +765,6 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         df_signatures = calc_signatures( df, gauge_col,
                                         time_window = ['all']) #, 'seasonal'])
         
-        
-        
         #### add upArea 
         ## also a static file to extract simulations
         ## upArea exists 
@@ -757,16 +779,15 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
     
         ## add elevation 
         dem_file = input_dir / 'EFAS_dem.nc'
-        
-        if dem_file.exists():         
-            cell_elevation = extract_ncfile(df_key, dem_file, 'elevation') 
+        if dem_file.exists(): 
             
+            cell_elevation = extract_ncfile(df_key, dem_file, 'elevation')['elevation'] 
             gauge_elevation = df_gauge['elevation'].unique()[0] 
-            print(gauge_elevation) 
-            print(cell_elevation)
             
             df_signatures.loc[ gauge_col, 'elevation'] = gauge_elevation 
+            df_signatures.loc[ cell_elevation.index, 'elevation'] = cell_elevation
         
+        print(df_signatures) 
         
         ## save signatures 
         fn_signatures = input_dir / 'signatures_{}.csv'.format(gauge_id) 
