@@ -651,6 +651,13 @@ def df_to_ds(df, grid_key, gauge_id, data_type):
     return ds_out 
 
 
+def extract_ncfile(df_loc, nc_file, parameter_name):
+    
+    ds = xr.open_dataset(nc_file)
+    print(ds)
+    return df_loc 
+
+
 def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'): 
     
     '''
@@ -684,8 +691,8 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         
         ## open simulation dataset 
         ds = xr.open_dataset(fn_sim) 
-        df_sim = ds.to_dataframe().reset_index()
-
+        df_sim = ds.to_dataframe().reset_index() 
+        
         ## reshape to dataframe 
         df = pd.DataFrame() 
         df['date'] = pd.to_datetime( df_sim['time'].unique() )
@@ -698,7 +705,7 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
             for j, y_cell in enumerate(df_sim['y'].unique()):
                 
                 _df = df_sim[ (df_sim['x'] == x_cell) & (df_sim['y'] == y_cell)] 
-
+                                
                 cell_id = '{}_{}{}'.format( gauge_id, int(i+1), int(j+1))
                 
                 time_ix = pd.to_datetime( _df['time'] )
@@ -707,15 +714,17 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
                 ## save x,y and cell id 
                 df_key.loc[cell_id, ['x', 'y']] = x_cell, y_cell 
                 
+                ## save lat lon 
                 lat_cell = _df['lat'].unique()[0] 
                 lon_cell = _df['lon'].unique()[0]
-                df_key.loc[cell_id, ['lat', 'lon']] = lat_cell, lon_cell
+                df_key.loc[cell_id, ['lat', 'lon']] = lat_cell, lon_cell 
+                
+                ## save cell upArea
+                df_key.loc[cell_id, 'upArea'] = _df['upArea'].unique()[0]
                                         
         ## read gauge data 
         df_gauge, meta = read_gauge_data([fn_obs]) 
         df_obs = df_gauge[(df_gauge['date'] >= '1991') &  (df_gauge['date'] < '2021')].copy()
-        print(df_gauge.head()) 
-        print(df_gauge.columns)
         
         ## get gauge date range 
         date_range = pd.to_datetime( df_obs['date'] ) 
@@ -724,22 +733,41 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         ## add gauge observations to dataframe for calculations 
         gauge_col = '{}_gauge'.format(gauge_id)
         df[gauge_col] = df_obs['value'] 
-
+        
         ## drop values based on missing values in gauge observations         
         df = df.dropna(subset=[gauge_col])
         
         ## calc signatures 
-        # df_signatures = calc_signatures( df, gauge_col,
-                                        # time_window = ['all']) #, 'seasonal'])
+        df_signatures = calc_signatures( df, gauge_col,
+                                        time_window = ['all']) #, 'seasonal'])
         
-        ## add upArea and elevation from static files file 
-        print(input_dir) 
+        
+        
+        #### add upArea 
+        ## also a static file to extract simulations
+        ## upArea exists 
+        # upArea_file = input_dir/ 'EFAS_upArea4.0.nc'
+        # print('A: ', upArea_file.exists())
+        
+        cell_upArea = df_key['upArea']                         ## in m2             
+        gauge_upArea = df_gauge['upArea'].unique()[0] * 10**6  ## from km2 to m2
+        
+        df_signatures.loc[ gauge_col, 'upArea'] = gauge_upArea 
+        df_signatures.loc[cell_upArea.index, 'upArea'] = cell_upArea
+    
+        ## add elevation 
         dem_file = input_dir / 'EFAS_dem.nc'
-        print('dem: ', dem_file.exists()) 
-        upArea_file = input_dir/ 'EFAS_upArea4.0.nc'
-        print('A: ', upArea_file.exists())
         
-        print(df_signatures.columns)
+        if dem_file.exists():         
+            cell_elevation = extract_ncfile(df_key, dem_file, 'elevation') 
+            
+            gauge_elevation = df_gauge['elevation'].unique()[0] 
+            print(gauge_elevation) 
+            print(cell_elevation)
+            
+            df_signatures.loc[ gauge_col, 'elevation'] = gauge_elevation 
+        
+        
         ## save signatures 
         fn_signatures = input_dir / 'signatures_{}.csv'.format(gauge_id) 
         # df_signatures.to_csv(fn_signatures)
