@@ -26,23 +26,26 @@ def calc_gof(model, stat):
     ## calculate chi-squared 
     # chi_stat, chi_p = stats.chisquare(model_hist, stat_hist)
     # print(chi_stat, chi_p)
-    ######################
+    ######################    
     
-    
-    ## KS-test     
-    # D, p = stats.kstest(model, stat)
+    ## K-S test     
     D, p = stats.ks_2samp(model, stat) 
     
     ## return result of K-test 
     ## if D greater than critical p-value --> rejected 
     ## D > p 
-    ## if D < p --> accepted 
+    ## if D < p --> accepted (1, 0 if rejected)
+    ## return int(D<p) 
     
     ## return: 
-    ## 1 if goodness of fit accepted, 0 if not accepted ?? 
-    return int(D<p)
-
-
+    ## 0 if p < 0.05 
+    ## p significance score if p > 0.05 (significance level)
+    if p < 0.05:
+        return 0 
+    else:
+        return p 
+ 
+    
 def calc_distr_normal(ts):
     
     ## drop remaining missing values 
@@ -138,7 +141,30 @@ def calc_distr_gamma(ts):
     return [k, theta, gof]
 
 def calc_distr_poisson(ts):
-    return [np.nan, np.nan]
+    
+    ts = ts.dropna() 
+
+    if len(ts) == 0:
+        return [np.nan, np.nan]
+    
+    ## poisson - number of events that will occur during
+    ## a specfic time interval - her: time interval of observations 
+    bins = np.arange(0, round(ts.max()+1))
+    
+    ## calculate n times flow has exceeded each bin    
+    n_exceeded = [ (ts>bin_val).sum() for bin_val in bins  ] 
+    
+    ## lambda value is mean number if events in time 
+    calc_lambda = np.nanmean(n_exceeded)
+    
+    ## calculate goodness of fit
+    try:
+        gof = calc_gof(n_exceeded, stats.poisson.rvs( mu = calc_lambda, size=len(ts)) )
+    except:
+        return [calc_lambda, 0]
+    
+    ##     lambda,  gof 
+    return [calc_lambda, gof]
 
 ##########################################
 ####           CORRELATION           #####
