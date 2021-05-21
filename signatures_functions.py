@@ -161,7 +161,7 @@ def calc_distr_poisson(ts):
     try:
         gof = calc_gof(n_exceeded, stats.poisson.rvs( mu = calc_lambda, size=len(ts)) )
     except:
-        return [calc_lambda, 0]
+        return [calc_lambda, np.nan]
     
     ##     lambda,  gof 
     return [calc_lambda, gof]
@@ -585,7 +585,7 @@ def calc_recession_curve(ts):
                 last_false = True 
         
         if (n_false == 0) | (last_false) :
-            ## if regression period is accepted, discrard the first 
+            ## if regression period is accepted, discard the first 
             ## lambda * len(p_df) values from the period
             n_skip = round( init_lambda * len(p_df) )
             ix_to_keep = p_df.iloc[n_skip:].index  

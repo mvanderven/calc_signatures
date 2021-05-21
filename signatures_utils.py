@@ -382,7 +382,7 @@ def calc_signatures(df, gauge_col,
           
         ## calc feature 
         for feature in features:
-            print(' [CALC] {}'.format(feature))
+            # print(' [CALC] {}'.format(feature))
             ## get output names
             result_cols = func_dict[feature]['cols']
             
