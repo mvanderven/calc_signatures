@@ -425,7 +425,6 @@ def calc_RBF(ts):
     #### accross years 
         
     #### SPLIT TIMESERIES 
-    #### ?? filling missing values?? 
     ts = ts.dropna()
     
     if len(ts) == 0:
@@ -435,23 +434,33 @@ def calc_RBF(ts):
     
     ## get delta_T to estimate if dates are continuous
     ## or with jumps 
-    dT = ts.index.to_series().diff() 
-
+    dT = ts.index.to_series().diff()  
+        
     ## check for jumps in timeseries  
     if dT.max() > pd.Timedelta('1d'): #pd.Timedelta(value=1, unit='days'): 
         
+        t_start = ts.index.values[0] 
+        t_end = ts.index.values[-1] 
+        
+        dti = pd.date_range(start=t_start, end = t_end, freq = '12MS')
+        
         ## TEST FOR MULTIPLE MOMENTS 
         ## determine chunk size 
-        t_start = ts.index.values[0] 
-        delta_T = dT.max() 
-        t_end = t_start + delta_T
+        # t_start = ts.index.values[0] 
+        # delta_T = dT.max() 
+        # t_end = t_start + delta_T
         
-        ts_chunk = ts.loc[(ts.index >= t_start) & (ts.index < t_end)]  
-        n_chunks = int( len(ts) / len(ts_chunk) )
-        
+        # ts_chunk = ts.loc[(ts.index >= t_start) & (ts.index < t_end)]  
+        # n_chunks = int( len(ts) / len(ts_chunk) ) 
+                
         ## get periods based on start date and frequency
-        dti = pd.date_range(start=t_start, freq='12MS', periods = n_chunks)
-
+        # dti = pd.date_range(start=t_start, freq='12MS', periods = n_chunks) 
+        # print(dti)
+        
+        # print(t_start, ts.index.values[-1])
+        # dti = pd.date_range(start=t_start, end = ts.index.values[-1], freq='12MS')
+        # print(dti)
+        
     ## else split based on years 
     else:
         iter_list = ts.index.year.unique()
