@@ -167,7 +167,7 @@ def rows_to_cols(df, id_col, index_col, target_col, resample_24hr = False):
 sorted_features = {
     'stats':        ['normal', 'log', 'gev', 'gamma', 'poisson'],
     'correlation':  ['n-acorr', 'n-ccorr'],
-    'fdc':          ['fdc-q', 'fdc-slope', 'lf-ratio'],
+    'fdc':          ['fdc-q', 'fdc-slope', 'lf-ratio', 'conc-index'],
     'hydro':        ['bf-index', 'dld', 'rld', 'rbf', 'src']
     }
 
@@ -242,10 +242,15 @@ func_dict = {
          'func': signatures_functions.calc_LF_ratio,
         'cols': ['lf-{}']  
         },
+    'conc-index':  {
+        'func': signatures_functions.calc_ci,
+        'cols': ['ci-{}']  
+        },
     'bf-index':  {
          'func': signatures_functions.calc_i_bf,
         'cols': ['bfi-{}']  
         },
+    
     'rld':  {
          'func': signatures_functions.calc_RLD,
         'cols': ['rld-{}']  
@@ -774,7 +779,8 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         
         ## calc signatures 
         df_signatures = calc_signatures( df, gauge_idx,
-                                        time_window = ['all', 'seasonal'])
+                                        time_window = ['all', 'seasonal'],
+                                        features = ['conc-index'])
         
         ## add buffer distance to center (for later filtering of distances) 
         df_signatures['n_buffer'] = 0 

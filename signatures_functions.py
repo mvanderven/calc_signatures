@@ -255,6 +255,18 @@ def calc_LF_ratio(ts, eps = 10e-6):
     Q90, Q50 = calc_FDC_q(ts, [90, 50]) 
     return (Q90+eps) / (Q50+eps)
 
+def calc_ci(ts):
+    
+    #### Concavity Index from:
+    ####    Sauquet, & Catalogne (2011) Comparison of catchment
+    ####    grouping methods for flow duration curve estimation
+    ####    at ungauged sites in France
+    ####
+    #### CI = (FDC_Q10 - FDC_Q99) / (FDC_Q1 - FDC_Q99)
+    
+    Q1, Q10, Q99 = calc_FDC_q(ts, [1, 10, 99])     
+    return (Q10-Q99)/(Q1-Q99)
+
 
 ##########################################
 ####       HYDROLOGIC INDICES         ####
