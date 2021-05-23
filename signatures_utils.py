@@ -168,7 +168,7 @@ sorted_features = {
     'stats':        ['normal', 'log', 'gev', 'gamma', 'poisson'],
     'correlation':  ['n-acorr', 'n-ccorr'],
     'fdc':          ['fdc-q', 'fdc-slope', 'lf-ratio', 'conc-index'],
-    'hydro':        ['bf-index', 'dld', 'rld', 'rbf', 'src']
+    'hydro':        ['bf-index', 'dld', 'rld', 'rbf', 'src', 'peak-distr']
     }
 
 
@@ -266,6 +266,10 @@ func_dict = {
     'src':  {
          'func': signatures_functions.calc_recession_curve,
         'cols': ['b_rc-{}', 'a_rc-{}']  
+        },
+    'peak-distr':  {
+         'func': signatures_functions.calc_peak_distr,
+        'cols': ['pks-{}']  
         }
     }
 
@@ -780,7 +784,7 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         ## calc signatures 
         df_signatures = calc_signatures( df, gauge_idx,
                                         time_window = ['all', 'seasonal'],
-                                        features = ['conc-index'])
+                                        features = ['peak-distr'])
         
         ## add buffer distance to center (for later filtering of distances) 
         df_signatures['n_buffer'] = 0 

@@ -293,6 +293,9 @@ def calc_limb_slope(ts):
     ## calculate differences between time steps 
     ts_diff = ts.diff()  
     
+    ## find peaks 
+    # ts_peaks = ts[ (ts> ts.shift(1) ) & (ts>  ts.shift(-1) ) ] 
+    
     ## indicate if increase or decrease between time steps 
     ts_slope = np.where( ts_diff > 0, 1, -1)
     
@@ -631,3 +634,36 @@ def calc_recession_curve(ts):
     a = intercept 
     # a = np.exp(intercept)    
     return [b, a]
+
+def calc_peak_distr(ts):
+    
+    #### From:
+    ####    Euser et al. (2013) A framework to assess the realism 
+    ####    of model structures usinghydrological signatures
+    ####
+    #### "Signature shows whether peak discharges are of equal height"
+    #### "Peak is defined as discharge at a time step of which both
+    #### previous and following timestep have a lower discharge" 
+    #### An FDC is constructed based on peak data 
+    #### Average slope between 10th and 50th percentile is 
+    #### calculated 
+    #### By taking 10th and 50th percentile, only higher peaks
+    #### are taken into account, but not the extremes 
+    
+    #### 1 - find peaks 
+    ts_peaks = ts[ (ts> ts.shift(1) ) & (ts>  ts.shift(-1) ) ] 
+    
+    if len(ts_peaks) > 0:
+        
+        #### 2 - construct FDC based on peak data
+        #### and calculate values for Q10 and Q50 
+        Q10, Q50 = calc_FDC_q(ts_peaks, [10, 50])
+        
+        ## return slope         
+        return (Q10 - Q50 ) / (0.1-0.5)
+    
+    ## no peaks found 
+    else:
+        return np.nan 
+
+
