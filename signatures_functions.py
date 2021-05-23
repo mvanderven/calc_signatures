@@ -294,15 +294,16 @@ def calc_limb_slope(ts):
     ts_diff = ts.diff()  
     
     ## find peaks 
-    # ts_peaks = ts[ (ts> ts.shift(1) ) & (ts>  ts.shift(-1) ) ] 
+    ts_peaks = ts[ (ts> ts.shift(1) ) & (ts>  ts.shift(-1) ) ] 
     
     ## indicate if increase or decrease between time steps 
-    ts_slope = np.where( ts_diff > 0, 1, -1)
+    # ts_slope = np.where( ts_diff > 0, 1, -1)
     
     ## detect peaks
     ## where a +1 point is followed by a -1 point 
-    mask_peaks = (ts_slope[:-1] > 0) & (ts_slope[1:] < 0)
-    return ts_diff, mask_peaks.sum()
+    # mask_peaks = (ts_slope[:-1] > 0) & (ts_slope[1:] < 0)
+    # return ts_diff, mask_peaks.sum()
+    return ts_diff, len(ts_peaks)
 
 
 def calc_RLD(ts):
