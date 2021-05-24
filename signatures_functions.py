@@ -661,7 +661,7 @@ def calc_peak_distr(ts):
         Q10, Q50 = calc_FDC_q(ts_peaks, [10, 50])
         
         ## return slope         
-        return (Q10 - Q50 ) / (0.1-0.5)
+        return (Q10 - Q50 ) / (0.9-0.5)
     
     ## no peaks found 
     else:
