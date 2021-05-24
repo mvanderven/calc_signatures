@@ -10,6 +10,8 @@ import pandas as pd
 import numpy as np 
 from scipy import stats
 
+import matplotlib.pyplot as plt 
+
 
 ##########################################
 ####         STAT FUNCTIONS           ####
@@ -221,7 +223,6 @@ def calc_FDC_q(ts, fdc_q):
     if ( type(fdc_prob) == int) or (type(fdc_val) == int):
         return [np.nan]*len(fdc_q)
     
-    
     ## find corresponding quantiles 
     for q in fdc_q:        
         ix_nearest = ( np.abs(fdc_prob - q) ).argmin() 
@@ -265,7 +266,72 @@ def calc_ci(ts):
     #### CI = (FDC_Q10 - FDC_Q99) / (FDC_Q1 - FDC_Q99)
     
     Q1, Q10, Q99 = calc_FDC_q(ts, [1, 10, 99])     
-    return (Q10-Q99)/(Q1-Q99)
+    return (Q10-Q99)/(Q1-Q99) 
+
+def calc_FDC_HV(ts):
+    
+    #### FDC High Segment Volume from:
+    ####    Shafii & Tolson (2015): Optimizing hydrological consistency
+    ####    by incorporating hydrological signatures into model
+    ####    calibration objectives 
+    ####
+    #### FDC_HV = sum(Q_h) 
+    #### with: Q_h are flow values with exceedance
+    #### probabilities below 0.02 
+    ####
+    
+    ## calculate FDC
+    p_vals, Q_vals = calc_FDC(ts)  
+    
+    ## check if FDC calculation complete 
+    if not isinstance(p_vals, int):
+        
+        ## find high flow values (p < 0.05)
+        ix_high_flows = np.where(p_vals <= 2)[0] 
+
+        ## return sum of all high flow values 
+        print('hv: ', Q_vals[ix_high_flows].sum() )
+        return Q_vals[ix_high_flows].sum()
+    
+    ## FDC calculation failed 
+    else:
+        return np.nan 
+
+
+def calc_FDC_LV(ts):
+    
+    #### FDC Low Segment Volume from:
+    ####    Shafii & Tolson (2015): Optimizing hydrological consistency
+    ####    by incorporating hydrological signatures into model
+    ####    calibration objectives 
+    ####
+    #### FDC_LV = sum( log(Q_l) - log(Q_min)  )
+    #### with Q_l are flow values with exceedance
+    #### probabilities over 0.7 with Q_min the minimum flow value 
+    
+    ## calculate FDC
+    p_vals, Q_vals = calc_FDC(ts) 
+    
+    ## check if FDC calculation complete 
+    if not isinstance(p_vals, int):
+        
+        ## find low flow values (0.7 > p > 1.)
+        ix_low_flows = np.where(p_vals >= 70)[0] 
+
+        ## find lowest flow value
+        ## log transform discharge values
+        try:
+            Q_low = np.log10(Q_vals[0])
+            Q_low_flows = np.log10( Q_vals[ix_low_flows] +10e-6 )
+        except:
+            Q_low = np.log10(Q_vals[0]+ 10e-6)
+            Q_low_flows = np.log10( Q_vals[ix_low_flows] + 10e-6)
+
+        return (Q_low_flows - Q_low).sum()
+    
+    ## FDC calculation failed 
+    else:
+        return np.nan 
 
 
 ##########################################
@@ -652,7 +718,7 @@ def calc_peak_distr(ts):
     #### are taken into account, but not the extremes 
     
     #### 1 - find peaks 
-    ts_peaks = ts[ (ts> ts.shift(1) ) & (ts>  ts.shift(-1) ) ] 
+    ts_peaks = ts[ ( ts > ts.shift(1) ) & ( ts > ts.shift(-1) ) ] 
     
     if len(ts_peaks) > 0:
         
@@ -661,7 +727,7 @@ def calc_peak_distr(ts):
         Q10, Q50 = calc_FDC_q(ts_peaks, [10, 50])
         
         ## return slope         
-        return (Q10 - Q50 ) / (0.9-0.5)
+        return (Q10 - Q50) / (0.9-0.5)
     
     ## no peaks found 
     else:
