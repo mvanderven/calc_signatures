@@ -169,9 +169,9 @@ sorted_features = {
     'correlation':  ['n-acorr', 'n-ccorr'],
     'fdc':          ['fdc-q', 'fdc-slope', 'lf-ratio', 'conc-index', 
                      'fdc-hv', 'fdc-lv'],
-    'hydro':        ['bf-index', 'dld', 'rld', 'rbf', 'src', 'peak-distr']
+    'hydro':        ['bf-index', 'dld', 'rld', 'rbf', 'src', 'peak-distr',
+                     'hf-stat', 'lf-stat']
     }
-
 
 stat_options  = sorted_features['stats'] 
 corr_options  = sorted_features['correlation']
@@ -278,9 +278,16 @@ func_dict = {
     'peak-distr':  {
          'func': signatures_functions.calc_peak_distr,
         'cols': ['pks-{}']  
+        },
+    'hf-stat':  {
+         'func': signatures_functions.high_flow_events,
+        'cols': ['hf-f-{}', 'hf-t-{}']  
+        },
+    'lf-stat':  {
+         'func': signatures_functions.low_flow_events,
+        'cols': ['lf-f-{}', 'lf-t-{}']  
         }
     }
-
 
 def calc_signatures(df, gauge_col,
                     features = feature_options, time_window = option_time_window,
@@ -793,13 +800,12 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         df_signatures = calc_signatures( df, gauge_idx,
                                         time_window = ['all', 'seasonal'],
                                         ## new features
-                                        features = [ 'fdc-hv', 'fdc-lv'])
+                                        features = ['lf-stat', 'hf-stat'])
                                             # 'peak-distr', 
                                             # 'conc-index',
-                                             
-                                           
-                                            
-        
+                                            # 'fdc-hv', 'fdc-lv'
+                                            # 'lf-stat', 'hf-stat'
+                                 
         ## add buffer distance to center (for later filtering of distances) 
         df_signatures['n_buffer'] = 0 
         df_signatures.loc[df_key.index, 'n_buffer'] = df_key['n_buffer'] 

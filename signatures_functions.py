@@ -734,3 +734,134 @@ def calc_peak_distr(ts):
         return np.nan 
 
 
+def calc_event_stats(ts, threshold_value, condition = '>'):
+    
+    ts = ts.dropna() 
+    
+    if len(ts) == 0:
+        return np.nan, np.nan 
+    
+    #### split dataseries based on years or periods in data 
+    dT = ts.index.to_series().diff()  
+        
+    ## check for jumps in timeseries  
+    if dT.max() > pd.Timedelta('1d'): #pd.Timedelta(value=1, unit='days'): 
+        
+        t_start = ts.index.values[0] 
+        t_end = ts.index.values[-1] 
+        
+        dti = pd.date_range(start=t_start, end = t_end, freq = '12MS')
+                
+    ## else split based on years 
+    else:
+        iter_list = ts.index.year.unique()
+        dti = pd.date_range(start = ts.index[0], freq='YS', periods = len(iter_list)) 
+    
+    ## go over all periods 
+    collect_frequency = [] 
+    collect_duration = []
+    
+    for i in range(len(dti)):
+
+        if i < (len(dti)-1):  
+            mask = (ts.index >= dti[i]) & (ts.index < dti[i+1])
+            
+        if i == (len(dti)-1):
+            mask = (ts.index >= dti[i])
+        
+        ## get period of interest
+        _ts = ts.loc[mask]
+        if len(_ts) > 0:
+            
+            if condition == '>':
+                _ts_event = _ts.loc[ _ts >= threshold_value] 
+            else:
+                _ts_event = _ts.loc[ _ts <= threshold_value] 
+            
+            if len(_ts_event) > 0:
+                                
+                _df = pd.DataFrame() 
+                _df['obs'] = _ts_event 
+                _df['dT'] = dT.loc[ _ts_event.index ]
+                _df['periods'] =  _df['dT'].dt.days.ne(1).cumsum()
+                                  
+                _gby = _df.groupby(['periods', 'dT']).size().reset_index(level=1, 
+                                                                        drop=True)
+                
+                n_events = len(_gby) 
+                len_events = _gby.values 
+                                 
+                collect_frequency.append(n_events) 
+                
+                for len_event in len_events:
+                    collect_duration.append(len_event)
+                
+            else:
+                collect_frequency.append(0)
+                collect_duration.append(0)
+                
+    return np.mean(collect_frequency), np.mean(collect_duration)
+
+
+def high_flow_events(ts):
+    
+    #### High Flow Event Frequency & Duration:
+    ####    Westerberg & McMillan (2015) Uncertainty
+    ####    in hydrological signatures
+    ####
+    #### High Flow Event Frequency:
+    ####    Average nr of daily high flow events per year 
+    ####    with high flow events defined as 9*Q_median 
+    ####
+    #### High Flow Event Duration:
+    ####    Average duration of daily flow events with 
+    ####    consecutive days of flow > 9*Q_median 
+    
+    ts = ts.dropna() 
+    
+    if len(ts) == 0:
+        return np.nan, np.nan 
+    
+    ## calculate high flow threshold for entire time series 
+    high_flow_threshold = 9 * ts.median() 
+    
+    ## calc and return frequency and duration
+    return calc_event_stats(ts, high_flow_threshold, condition = '>')
+    
+def low_flow_events(ts):
+    
+    #### Low Flow Event Frequency & Duration:
+    ####    Westerberg & McMillan (2015) Uncertainty
+    ####    in hydrological signatures
+    ####
+    #### Low Flow Event Frequency:
+    ####    Average nr of daily low flow events per year 
+    ####    with low flow events defined as 0.2*Q_mean
+    ####
+    #### Low Flow Event Duration:
+    ####    Average duration of daily flow events with 
+    ####    consecutive days of flow < 0.2*Q_mean    
+    
+    ts = ts.dropna() 
+    
+    if len(ts) == 0:
+        return np.nan, np.nan 
+    
+    ## calculate low flow threshold for entire time series 
+    low_flow_threshold = 0.2 * ts.mean() 
+    
+    ## calc and return frequency and duration
+    return calc_event_stats(ts, low_flow_threshold, condition = '<')
+
+
+
+
+
+
+
+
+
+
+
+
+
