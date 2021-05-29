@@ -857,10 +857,9 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         df_signatures.loc[ gauge_idx, 'target'] = np.nan 
                 
         ## save signatures 
-        fn_signatures = input_dir / 'signatures_{}.csv'.format(gauge_id) 
+        fn_signatures = input_dir / 'signatures_{}-p2.csv'.format(gauge_id) 
         df_signatures.to_csv(fn_signatures)
         
-        print(df_signatures)
         
         ## calculate similarity vector
         # df_similarity_vector = calc_vector(df_signatures.drop(['target'], axis=1), gauge_idx)
