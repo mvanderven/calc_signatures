@@ -101,7 +101,7 @@ def read_gauge_data(fn_list, transform = False, src_proj = None, dst_proj = None
             if 'area' in vals:
                 meta['upArea(km2)'] = float(vals[-1])
                 temp_df['upArea'] = meta['upArea(km2)'] 
-            
+              
             if 'Altitude' in vals:
                 elevation = float(vals[-1]) 
                 if elevation <= -999.:
@@ -286,8 +286,17 @@ func_dict = {
     'lf-stat':  {
          'func': signatures_functions.low_flow_events,
         'cols': ['lf-f-{}', 'lf-t-{}']  
+        },
+    'order-nr':  {
+         'func': signatures_functions.str_order_nr,
+        'cols': ['str-nr']  
+        },
+    'upA-match':  {
+         'func': signatures_functions.upA_match,
+        'cols': ['upA-m']  
         }
     }
+
 
 def calc_signatures(df, gauge_col,
                     features = feature_options, time_window = option_time_window,
@@ -794,17 +803,20 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         df[gauge_idx] = df_obs['value'] 
         
         ## drop values based on missing values in gauge observations         
-        df = df.dropna(subset=[gauge_idx])
-        
+        df = df.dropna(subset=[gauge_idx]) 
+                
         ## calc signatures 
         df_signatures = calc_signatures( df, gauge_idx,
                                         time_window = ['all', 'seasonal'],
+                                        
                                         ## new features
-                                        features = ['lf-stat', 'hf-stat'])
-                                            # 'peak-distr', 
-                                            # 'conc-index',
-                                            # 'fdc-hv', 'fdc-lv'
-                                            # 'lf-stat', 'hf-stat'
+                                        features = ['peak-distr', 
+                                                    'conc-index',
+                                                    'fdc-hv', 'fdc-lv',
+                                                    'lf-stat', 'hf-stat'])
+                                                    
+        # not viable
+        # 'order-nr', 'upA-match'
                                  
         ## add buffer distance to center (for later filtering of distances) 
         df_signatures['n_buffer'] = 0 
@@ -825,7 +837,9 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         gauge_upArea = df_gauge['upArea'].unique()[0] * 10**6  ## from km2 to m2
         
         df_signatures.loc[ gauge_idx, 'upArea'] = gauge_upArea 
-        df_signatures.loc[ cell_upArea.index, 'upArea'] = cell_upArea
+        df_signatures.loc[ cell_upArea.index, 'upArea'] = cell_upArea 
+
+        
     
         ## add elevation values 
         dem_file = input_dir / 'EFAS_dem.nc'
@@ -846,40 +860,41 @@ def pa_calc_signatures(gauge_id, input_dir, obs_dir, gauge_fn, var='dis24'):
         fn_signatures = input_dir / 'signatures_{}.csv'.format(gauge_id) 
         df_signatures.to_csv(fn_signatures)
         
+        print(df_signatures)
         
         ## calculate similarity vector
-        df_similarity_vector = calc_vector(df_signatures.drop(['target'], axis=1), gauge_idx)
+        # df_similarity_vector = calc_vector(df_signatures.drop(['target'], axis=1), gauge_idx)
         ## label data - identify match
-        df_similarity_vector = assign_labels(df_similarity_vector, df_key, df_gauge_meta) 
+        # df_similarity_vector = assign_labels(df_similarity_vector, df_key, df_gauge_meta) 
         ## save labelled data 
-        fn_similarity = input_dir / 'vector_similarity_{}.csv'.format(gauge_id) 
-        df_similarity_vector.to_csv(fn_similarity)
+        # fn_similarity = input_dir / 'vector_similarity_{}.csv'.format(gauge_id) 
+        # df_similarity_vector.to_csv(fn_similarity)
         
         ## RESHAPE DATA 
         ## FROM DATAFRAME TO NETCDF
         
         ## drop coordinate data 
-        df_similarity_vector = df_similarity_vector.drop(coord_pars, axis=1)
-        df_signatures = df_signatures.drop(coord_pars, axis=1)
+        # df_similarity_vector = df_similarity_vector.drop(coord_pars, axis=1)
+        # df_signatures = df_signatures.drop(coord_pars, axis=1)
         
         ## reshape output of similarity vector to xarray  
-        ds_similarity = df_to_ds(df_similarity_vector, df_key,
-                                 gauge_id, 'similarity vector') 
+        # ds_similarity = df_to_ds(df_similarity_vector, df_key,
+                                 # gauge_id, 'similarity vector') 
         ## save output
-        fn_similarity_nc = input_dir / 'vector_similarity_{}.nc'.format(gauge_id) 
-        ds_similarity.to_netcdf(fn_similarity_nc)
+        # fn_similarity_nc = input_dir / 'vector_similarity_{}.nc'.format(gauge_id) 
+        # ds_similarity.to_netcdf(fn_similarity_nc)
         
         ## also output of signatures in grid 
         ## without gauge signature data 
-        df_signatures = df_signatures.iloc[:-1].copy() 
+        # df_signatures = df_signatures.iloc[:-1].copy() 
         
         ## reshape data to grid 
-        ds_signatures = df_to_ds(df_signatures, df_key,
-                                 gauge_id, 'signatures')
+        # ds_signatures = df_to_ds(df_signatures, df_key,
+        #                           gauge_id, 'signatures')
 
         ## save output
-        fn_signatures_nc = input_dir / 'signatures_{}.nc'.format(gauge_id)
-        ds_signatures.to_netcdf( fn_signatures_nc)
+        # fn_signatures_nc = input_dir / 'signatures_{}.nc'.format(gauge_id)
+        # ds_signatures.to_netcdf( fn_signatures_nc)
         return 1 
 
     else:

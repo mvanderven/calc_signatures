@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np 
 from scipy import stats
 
-import matplotlib.pyplot as plt 
+# import matplotlib.pyplot as plt 
 
 
 ##########################################
@@ -290,7 +290,6 @@ def calc_FDC_HV(ts):
         ix_high_flows = np.where(p_vals <= 2)[0] 
 
         ## return sum of all high flow values 
-        print('hv: ', Q_vals[ix_high_flows].sum() )
         return Q_vals[ix_high_flows].sum()
     
     ## FDC calculation failed 
@@ -618,7 +617,12 @@ def calc_recession_curve(ts):
     ## higher value of lambda increases b 
     # init_lambda = 0.3  
     init_lambda = 0.05
-        
+    
+    ts = ts.dropna()
+   
+    if len(ts) == 0:
+        return [np.nan, np.nan]
+    
     ## calculate 3-day moving average 
     ts_mv = ts.rolling(window=3, center=True).mean() 
     
@@ -627,7 +631,7 @@ def calc_recession_curve(ts):
 
     ## mask recession periods 
     recession_mask = ts_mv_diff <= 0. 
-    
+
     if recession_mask.sum() == 0:
         ## no recession periods detected 
         return [np.nan, np.nan]
@@ -689,7 +693,7 @@ def calc_recession_curve(ts):
         return [np.nan, np.nan]
     
     ## plot Q and delta_Q on a natural logarithmic scale 
-    _df_analyse['log_Q'] = np.log( _df_analyse['Q'] )
+    _df_analyse['log_Q'] = np.log( (_df_analyse['Q']+ 10e-6) )
     _df_analyse['log_dQ'] = np.log( abs(_df_analyse['dQ'] + 10e-6) )
     
     ## use ordinary least squares regression to find a and b in:
@@ -833,6 +837,10 @@ def low_flow_events(ts):
     #### Low Flow Event Frequency & Duration:
     ####    Westerberg & McMillan (2015) Uncertainty
     ####    in hydrological signatures
+    #### and
+    ####    Clausen & Biggs (2000) Flow variables for 
+    ####    ecological studies in temperate streams:
+    ####    groupings based on covariance
     ####
     #### Low Flow Event Frequency:
     ####    Average nr of daily low flow events per year 
@@ -854,7 +862,11 @@ def low_flow_events(ts):
     return calc_event_stats(ts, low_flow_threshold, condition = '<')
 
 
+def str_order_nr():
+    return 
 
+def upA_match():
+    return 
 
 
 
